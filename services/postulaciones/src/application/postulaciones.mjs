@@ -2,7 +2,7 @@
 // Reciben sus dependencias como parámetro: repositorio, publicador, generarId y reloj.
 // No conocen AWS ni HTTP.
 import { ErrorDominio } from '../domain/errores.mjs'
-import { crearOportunidad } from '../domain/Oportunidad.mjs'
+import { crearOportunidad, TIPOS } from '../domain/Oportunidad.mjs'
 import { crearPostulacion, eventoPostulacionCreada } from '../domain/Postulacion.mjs'
 
 function exigirGrupo(actor, grupo) {
@@ -23,10 +23,14 @@ export async function publicarOportunidad({ repositorio, generarId, reloj }, { a
   return oportunidad
 }
 
-export async function listarOportunidades({ repositorio }, { actor }) {
+// tipo es opcional: si viene, devuelve solo las ofertas de ese tipo (PASANTIA, PRACTICA, TRABAJO o PROYECTO).
+export async function listarOportunidades({ repositorio }, { actor, tipo }) {
   if (!actor?.id) throw new ErrorDominio(403, 'falta el usuario del token')
+  if (tipo !== undefined && !TIPOS.includes(tipo)) {
+    throw new ErrorDominio(400, `tipo debe ser uno de: ${TIPOS.join(', ')}`)
+  }
   const todas = await repositorio.listarOportunidades()
-  return todas.filter((oportunidad) => oportunidad.activa)
+  return todas.filter((oportunidad) => oportunidad.activa && (!tipo || oportunidad.tipo === tipo))
 }
 
 export async function misOportunidades({ repositorio }, { actor }) {
