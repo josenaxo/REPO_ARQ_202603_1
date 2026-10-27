@@ -23,9 +23,14 @@ function leerBody(event) {
   }
 }
 
+// X-App-Version: qué versión de la Lambda respondió ("$LATEST" si se llamó directo,
+// "3", "4"... si se llamó por el alias). Con ella el canario mide cada versión por separado (F2-12).
 const respuesta = (statusCode, body) => ({
   statusCode,
-  headers: { 'content-type': 'application/json' },
+  headers: {
+    'content-type': 'application/json',
+    'x-app-version': process.env.AWS_LAMBDA_FUNCTION_VERSION ?? 'local',
+  },
   body: JSON.stringify(body),
 })
 
@@ -39,7 +44,7 @@ export function crearHandler(deps) {
         case 'POST /oportunidades':
           return respuesta(201, await casos.publicarOportunidad(deps, { actor, datos: leerBody(event) }))
         case 'GET /oportunidades':
-          return respuesta(200, await casos.listarOportunidades(deps, { actor }))
+          return respuesta(200, await casos.listarOportunidades(deps, { actor, tipo: event.queryStringParameters?.tipo }))
         case 'GET /oportunidades/mias':
           return respuesta(200, await casos.misOportunidades(deps, { actor }))
         case 'POST /oportunidades/{id}/postulaciones':
