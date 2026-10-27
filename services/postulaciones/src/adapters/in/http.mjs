@@ -43,8 +43,10 @@ export function crearHandler(deps) {
       switch (event.routeKey) {
         case 'POST /oportunidades':
           return respuesta(201, await casos.publicarOportunidad(deps, { actor, datos: leerBody(event) }))
-        case 'GET /oportunidades':
-          return respuesta(200, await casos.listarOportunidades(deps, { actor, tipo: event.queryStringParameters?.tipo }))
+        case 'GET /oportunidades': {
+          const { tipo, remoto } = event.queryStringParameters ?? {}
+          return respuesta(200, await casos.listarOportunidades(deps, { actor, tipo, remoto }))
+        }
         case 'GET /oportunidades/mias':
           return respuesta(200, await casos.misOportunidades(deps, { actor }))
         case 'POST /oportunidades/{id}/postulaciones':

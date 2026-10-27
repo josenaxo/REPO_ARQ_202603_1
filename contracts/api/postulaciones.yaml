@@ -39,6 +39,11 @@ paths:
           required: false
           description: Filtra por tipo de oferta (desde v0.4)
           schema: { type: string, enum: [PASANTIA, PRACTICA, TRABAJO, PROYECTO] }
+        - name: remoto
+          in: query
+          required: false
+          description: true solo remotas, false solo presenciales (desde v0.4.1)
+          schema: { type: string, enum: ['true', 'false'] }
       responses:
         '200':
           description: Lista de ofertas activas
