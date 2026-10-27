@@ -85,3 +85,12 @@ test('las ofertas cerradas no aparecen en la lista general', async () => {
   await deps.repositorio.guardarOportunidad({ ...o, activa: false })
   assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE })).length, 0)
 })
+
+test('GET /oportunidades filtra por tipo y rechaza un tipo inventado', async () => {
+  const deps = dependencias()
+  await casos.publicarOportunidad(deps, { actor: EMPRESA, datos: OFERTA })
+  await casos.publicarOportunidad(deps, { actor: EMPRESA, datos: { ...OFERTA, tipo: 'TRABAJO' } })
+  assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE })).length, 2)
+  assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE, tipo: 'TRABAJO' })).length, 1)
+  await assert.rejects(casos.listarOportunidades(deps, { actor: ESTUDIANTE, tipo: 'CHAMBA' }), { estado: 400 })
+})

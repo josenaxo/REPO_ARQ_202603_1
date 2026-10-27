@@ -33,6 +33,12 @@ paths:
     get:
       summary: Listar las ofertas activas, mas nuevas primero
       x-grupos: [estudiante, empresa, colegio]
+      parameters:
+        - name: tipo
+          in: query
+          required: false
+          description: Filtra por tipo de oferta (desde v0.4)
+          schema: { type: string, enum: [PASANTIA, PRACTICA, TRABAJO, PROYECTO] }
       responses:
         '200':
           description: Lista de ofertas activas

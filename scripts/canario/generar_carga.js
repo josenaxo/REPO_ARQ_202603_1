@@ -78,8 +78,20 @@ async function main() {
     .sort((a, b) => a - b)
   const indiceP95 = Math.max(0, Math.ceil(duraciones.length * 0.95) - 1)
   const fallidas = resultados.filter(({ estado }) => !estado.startsWith('2')).length
-
+  const resumen = (lista) => {
+    const d = lista.map(({ duracionMs }) => duracionMs).sort((a, b) => a - b)
+    const malas = lista.filter(({ estado }) => !estado.startsWith('2')).length
+    return {
+      total: lista.length,
+      erroresPorcentaje: Number(((malas / lista.length) * 100).toFixed(2)),
+      p95Ms: Number(d[Math.max(0, Math.ceil(d.length * 0.95) - 1)].toFixed(2)),
+    }
+  }
+  const porVersion = Object.fromEntries(
+    Object.keys(contarPor('version')).map((v) => [v, resumen(resultados.filter((r) => r.version === v))]),
+  )
   console.log(JSON.stringify({
+    porVersion,
     url,
     total: resultados.length,
     concurrencia: trabajadores,
