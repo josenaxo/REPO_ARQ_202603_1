@@ -94,3 +94,13 @@ test('GET /oportunidades filtra por tipo y rechaza un tipo inventado', async () 
   assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE, tipo: 'TRABAJO' })).length, 1)
   await assert.rejects(casos.listarOportunidades(deps, { actor: ESTUDIANTE, tipo: 'CHAMBA' }), { estado: 400 })
 })
+
+test('GET /oportunidades filtra por remoto y combina con tipo', async () => {
+  const deps = dependencias()
+  await casos.publicarOportunidad(deps, { actor: EMPRESA, datos: OFERTA })
+  await casos.publicarOportunidad(deps, { actor: EMPRESA, datos: { ...OFERTA, remoto: true } })
+  assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE, remoto: 'true' })).length, 1)
+  assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE, remoto: 'false' })).length, 1)
+  assert.equal((await casos.listarOportunidades(deps, { actor: ESTUDIANTE, tipo: 'TRABAJO', remoto: 'true' })).length, 0)
+  await assert.rejects(casos.listarOportunidades(deps, { actor: ESTUDIANTE, remoto: 'si' }), { estado: 400 })
+})

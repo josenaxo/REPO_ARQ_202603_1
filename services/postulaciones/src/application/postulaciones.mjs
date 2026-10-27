@@ -23,14 +23,20 @@ export async function publicarOportunidad({ repositorio, generarId, reloj }, { a
   return oportunidad
 }
 
-// tipo es opcional: si viene, devuelve solo las ofertas de ese tipo (PASANTIA, PRACTICA, TRABAJO o PROYECTO).
-export async function listarOportunidades({ repositorio }, { actor, tipo }) {
+// Filtros opcionales: tipo (PASANTIA, PRACTICA, TRABAJO o PROYECTO) y remoto ("true" o "false").
+export async function listarOportunidades({ repositorio }, { actor, tipo, remoto }) {
   if (!actor?.id) throw new ErrorDominio(403, 'falta el usuario del token')
   if (tipo !== undefined && !TIPOS.includes(tipo)) {
     throw new ErrorDominio(400, `tipo debe ser uno de: ${TIPOS.join(', ')}`)
   }
+  if (remoto !== undefined && remoto !== 'true' && remoto !== 'false') {
+    throw new ErrorDominio(400, 'remoto debe ser true o false')
+  }
   const todas = await repositorio.listarOportunidades()
-  return todas.filter((oportunidad) => oportunidad.activa && (!tipo || oportunidad.tipo === tipo))
+  return todas.filter((o) =>
+    o.activa &&
+    (!tipo || o.tipo === tipo) &&
+    (remoto === undefined || o.remoto === (remoto === 'true')))
 }
 
 export async function misOportunidades({ repositorio }, { actor }) {
