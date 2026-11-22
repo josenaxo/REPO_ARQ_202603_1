@@ -21,11 +21,16 @@ serverless en AWS, uno por dominio (patrón Strangler Fig).
 ```
 Next.js (frontend) ──► API Gateway HTTP API ──► autorizador JWT (Cognito)
                               │
-        ┌─────────────┬───────┴───────┬──────────────────┐
-     health        perfiles       habilidades       postulaciones ──► alias "live" (canario)
-     (Lambda)      (Lambda)        (Lambda)          (Lambda)
-        └─────────────┴───────┬───────┴──────────────────┘
-                     DynamoDB (tabla única)       SQS EventsQueue ──► EventsDLQ
+     ┌───────────┬────────────┼──────────────┬────────────────┐
+  health     perfiles    habilidades  postulaciones*   notificaciones
+ (Lambda)    (Lambda)     (Lambda)       (Lambda)         (Lambda)
+     └───────────┴────────────┼──────────────┴────────────────┘
+                   DynamoDB (tabla única)
+
+habilidades y postulaciones ──► SQS EventsQueue ──► consumidor de notificaciones
+                                       └──► EventsDLQ (después de 5 fallos)
+
+* GET /oportunidades va por el alias "live" de la Lambda (despliegue canario).
 ```
 
 | Servicio | Rol | Responsabilidad | Eventos que publica |
@@ -34,9 +39,10 @@ Next.js (frontend) ──► API Gateway HTTP API ──► autorizador JWT (Cog
 | `services/perfiles` | 3 | Registro, perfil, colegios y su personalización | — |
 | `services/habilidades` | 2 | Declarar y validar habilidades | `HabilidadValidada` |
 | `services/postulaciones` | 1 | Ofertas de empresas y postulaciones | `PostulacionCreada` |
+| `services/notificaciones` | 3 | Avisos de los tres actores, creados a partir de los eventos de la cola | — (consume `PostulacionCreada` y `HabilidadValidada`) |
 
 Cada servicio sigue arquitectura hexagonal (`domain`, `application`, `ports`, `adapters`). El detalle de los patrones está en
-[`docs/patrones.md`](docs/patrones.md) y la lista de las 19 rutas en [`docs/endpoints.md`](docs/endpoints.md).
+[`docs/patrones.md`](docs/patrones.md) y la lista de las 23 rutas en [`docs/endpoints.md`](docs/endpoints.md).
 
 **Tecnologías:** Node.js 22 (JavaScript ESM), AWS Lambda, API Gateway HTTP API, DynamoDB, SQS con DLQ, Cognito,
 Serverless Framework v4 (CloudFormation), GitHub Actions, Docker (DynamoDB Local), Next.js 14.
@@ -48,7 +54,7 @@ infra/shared/          Tabla, colas, Cognito, HTTP API y autorizador (compartido
 services/<servicio>/   Un microservicio: src/{domain,application,ports,adapters}, test/, serverless.yml
 contracts/api/         OpenAPI de cada servicio
 contracts/eventos/     JSON Schema de cada evento
-docs/                  Decisiones, modelo de datos, canario, patrones, endpoints y colección de Postman
+docs/                  Decisiones, modelo de datos, canario, patrones, endpoints, seguridad y colección de Postman
 scripts/aws/           Usuarios y tokens de prueba
 scripts/canario/       Despliegue canario (alias live, pesos y generador de carga)
 scripts/local/         Tabla y datos de prueba para DynamoDB Local

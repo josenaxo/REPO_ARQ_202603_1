@@ -81,25 +81,58 @@ Ejemplo del formato:
 
 ### perfiles (Matías)
 
+Una sola Lambda, `perfiles`, atiende las 7 rutas, todas con el autorizador JWT (`services/perfiles/serverless.yml:31-64`). Los archivos de la tabla son relativos a `services/perfiles/`.
+
 | Ruta | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
-| `POST /perfiles` | sin grupo (registro) | | | | |
-| `GET /perfiles/me` | todos | | | | |
-| `PUT /perfiles/me` | todos | | | | |
-| `GET /colegios` | todos | | | | |
-| `GET /colegios/{id}/config` | todos | | | | |
-| `PUT /colegios/{id}/config` | colegio dueño | | | | |
-| `GET /colegios/{id}/estudiantes` | colegio dueño | | | | |
+| `POST /perfiles` | sin grupo (registro); con grupo `colegio` o `empresa`, 403 | `src/application/registrarPerfil.mjs:7-11` | JSON válido; `nombre` y `apellido` obligatorios; solo los campos del estudiante, con largo máximo (`src/domain/Perfil.mjs:10-14`); `anio` entero de 1 a 7; `colegioId` tiene que existir y `especialidad` ser oficial del Mineduc y de ese colegio. Si no, 400. Perfil repetido: 409 (`Put` condicional) | `cognito-idp:AdminAddUserToGroup` sobre el user pool; `dynamodb:GetItem` y `dynamodb:PutItem` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:55-73`) |
+| `GET /perfiles/me` | todos, también sin grupo; cada uno el suyo | `src/application/obtenerPerfil.mjs:7`; el id sale del token | No recibe datos. Sin perfil: 404 y no 403, para que el recién registrado pueda crearlo | `dynamodb:GetItem` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:95`) |
+| `PUT /perfiles/me` | todos; cada uno el suyo | `src/application/actualizarPerfil.mjs:7-11` | Objeto JSON; lista blanca de campos por tipo, así `readinessScore`, `tipo` y `userId` se ignoran (`src/domain/Perfil.mjs:65-83`); obligatorios no vacíos; `sitioWeb` solo `http(s)`, para no guardar un `javascript:` (`src/domain/validaciones.mjs:21-35`); `colegioId` y `especialidad` como en el registro. Si no, 400. Sin perfil: 404 | `dynamodb:GetItem` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/dominio.test.mjs:38-71`, `test/casosDeUso.test.mjs:102-147`) |
+| `GET /colegios` | todos | `src/application/listarColegios.mjs:5` | No recibe datos. Devuelve solo `id`, `nombre` y `logo` (`src/adapters/out/dynamoRepositorioPerfiles.mjs:151-154`) | `dynamodb:Query` sobre el índice `GSI1` | Implementado (`test/casosDeUso.test.mjs:189`) |
+| `GET /colegios/{id}/config` | todos: la personalización del colegio es pública | `src/application/obtenerConfigColegio.mjs:6` | Colegio inexistente: 404 | `dynamodb:GetItem` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:160`) |
+| `PUT /colegios/{id}/config` | colegio dueño | `src/application/comunes.mjs:17-26`: grupo `colegio` en el token **y** un perfil de ese mismo colegio. Si no, 403, antes de mirar si el colegio existe | `nombre` obligatorio; largos máximos; `colorPrincipal` con formato `#RRGGBB`; `sitioWeb` y `logo` solo `http(s)` o ruta interna, nunca `//otro-sitio`; hasta 20 especialidades oficiales (`src/domain/ConfigColegio.mjs:11-40`). Si no, 400. Colegio inexistente: 404 | `dynamodb:GetItem` y `dynamodb:PutItem` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:165-185`, `test/dominio.test.mjs:81-116`) |
+| `GET /colegios/{id}/estudiantes` | colegio dueño | `src/application/comunes.mjs:17-26`, la misma regla | No recibe cuerpo | `dynamodb:GetItem` sobre la tabla; `dynamodb:Query` sobre el índice `GSI1` | Implementado (`test/casosDeUso.test.mjs:210`) |
+
+En todas las rutas:
+
+- Sin token, el autorizador responde 401 antes de llegar a la Lambda. El usuario sale de los claims que ya validó el autorizador, nunca del cuerpo (`src/adapters/in/http.mjs:35-45`), y sin usuario la respuesta es 403 (`src/application/comunes.mjs:5-9`).
+- Un error inesperado responde 500 sin detalles; el detalle queda solo en el log (`src/adapters/in/http.mjs:82-84`).
+- Los valores del usuario llegan a DynamoDB como parámetros del SDK, nunca dentro del texto de la consulta, así que no hay inyección.
+
+Rol ideal de la función `perfiles` (Diseñado; hoy usa LabRole):
+
+- `dynamodb:GetItem`, `dynamodb:PutItem` y `dynamodb:UpdateItem` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>`.
+- `dynamodb:Query` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>/index/GSI1`.
+- `cognito-idp:AdminAddUserToGroup` sobre `arn:aws:cognito-idp:us-east-1:<cuenta>:userpool/<UserPoolId>`.
+- `logs:CreateLogStream` y `logs:PutLogEvents` sobre su log group, `/aws/lambda/ceibbo-perfiles-<stage>-perfiles`.
+- Ninguna ruta necesita `Scan`, `DeleteItem`, S3 ni SQS.
+
+`AdminAddUserToGroup` se da sobre todo el user pool: hoy solo el código limita el grupo a `estudiante` (`src/application/registrarPerfil.mjs:18`). Diseño ideal: sacar `POST /perfiles` a una función propia, para que solo ella tenga ese permiso y las otras seis rutas no puedan cambiar grupos.
 
 ### notificaciones (Matías, F2-02)
 
+Dos Lambdas: `notificaciones` atiende las 4 rutas, todas con el autorizador JWT, y `consumidor` lee la cola de eventos (`services/notificaciones/serverless.yml:32-66`). Los archivos de la tabla son relativos a `services/notificaciones/`.
+
 | Ruta o evento | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
-| `GET /notifications` | todos, cada uno las suyas | | | | |
-| `PATCH /notifications/read-all` | todos, cada uno las suyas | | | | |
-| `PATCH /notifications/{id}/read` | dueño de la notificación | | | | |
-| `DELETE /notifications/{id}` | dueño de la notificación | | | | |
-| Consumidor de `EventsQueue` (SQS) | no aplica: lo invoca SQS | | | | |
+| `GET /notifications` | todos, cada uno las suyas | `src/application/notificaciones.mjs:20-23`: solo se consulta la partición `NOTIF#<sub del token>` (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:15`) | No recibe datos | `dynamodb:Query` sobre la tabla | Implementado (`test/http.test.mjs:30`) |
+| `PATCH /notifications/read-all` | todos, cada uno las suyas | `src/application/notificaciones.mjs:31-34`, la misma partición | No recibe datos. El `Update` es condicional (`attribute_exists(PK)`): no revive una notificación borrada | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:52`) |
+| `PATCH /notifications/{id}/read` | dueño de la notificación | `src/adapters/out/dynamoRepositorioNotificaciones.mjs:43-52`: el `id` se busca solo dentro de la partición del usuario. Una ajena da 404 y no 403, así no se sabe si existe | El `id` solo se compara en un filtro. Si no existe, 404 | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:45`) |
+| `DELETE /notifications/{id}` | dueño de la notificación | Igual que la anterior (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:116-130`) | `Delete` condicional. Si no existe, 404 | `dynamodb:Query` y `dynamodb:DeleteItem` sobre la tabla | Implementado (`test/http.test.mjs:60`) |
+| Consumidor de `EventsQueue` (SQS) | no aplica: lo invoca SQS, no tiene ruta HTTP | `src/adapters/in/sqs.mjs:18-35` | JSON válido; `version` 1; `id`, `fecha` válida y `destinatarioId` obligatorios; los campos de `datos` que pide el contrato (`src/domain/Notificacion.mjs:34-45`). Un mensaje inválido se reintenta y después de 5 intentos pasa a la DLQ. Tipo desconocido: se ignora. Repetido: no se duplica (`Put` condicional, `src/adapters/out/dynamoRepositorioNotificaciones.mjs:77-93`) | `sqs:ReceiveMessage`, `sqs:DeleteMessage` y `sqs:GetQueueAttributes` sobre `EventsQueue`; `dynamodb:PutItem` sobre la tabla | Implementado (`test/sqs.test.mjs:15-59`, `test/dominio.test.mjs:30-51`). Probado en rol3: el mismo evento enviado dos veces dio `creada` y después `duplicado` |
+
+En las 4 rutas:
+
+- Sin token, el autorizador responde 401. El usuario es el `sub` de los claims ya validados (`src/adapters/in/http.mjs:7-12`) y sin usuario la respuesta es 403 (`src/application/notificaciones.mjs:6-8`, prueba en `test/http.test.mjs:69`).
+- No se exige grupo, porque los tres actores reciben notificaciones.
+- Un error inesperado responde 500 sin detalles (`src/adapters/in/http.mjs:39-42`, prueba en `test/http.test.mjs:81`).
+
+Rol ideal (Diseñado; hoy las dos usan LabRole). Con un rol por función, ninguna tiene los permisos de la otra:
+
+- `notificaciones`: `dynamodb:Query`, `dynamodb:UpdateItem` y `dynamodb:DeleteItem` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>`; `logs:CreateLogStream` y `logs:PutLogEvents` sobre `/aws/lambda/ceibbo-notificaciones-<stage>-notificaciones`. No puede leer la cola ni crear notificaciones.
+- `consumidor`: `sqs:ReceiveMessage`, `sqs:DeleteMessage` y `sqs:GetQueueAttributes` sobre el ARN de `EventsQueue` (output `EventsQueueArn` de `infra/shared`); `dynamodb:PutItem` sobre la tabla; `logs:CreateLogStream` y `logs:PutLogEvents` sobre `/aws/lambda/ceibbo-notificaciones-<stage>-consumidor`. No puede leer, marcar ni borrar notificaciones.
+
+La cola no tiene una política propia (`infra/shared/serverless.yml:52-58`): cualquiera con permisos de SQS en la cuenta puede publicar en ella, y el consumidor confía en el `destinatarioId` del mensaje. Diseño ideal: una política de la cola que deje `sqs:SendMessage` solo a los roles de postulaciones y habilidades.
 
 ### infra/shared (José)
 
