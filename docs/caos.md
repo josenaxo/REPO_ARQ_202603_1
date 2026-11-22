@@ -208,3 +208,42 @@ Reglas obligatorias:
 | Resultado | Aprobado / Rechazado / Abortado |
 | Aprendizajes y acciones | Por completar |
 
+
+## 6. Experimento ejecutado: latencia en postulaciones (CHAOS-POS-01)
+
+| Campo | Definición |
+|---|---|
+| ID | `CHAOS-POS-01` |
+| Responsable | José (Rol 1) |
+| Servicio y stage | `ceibbo-postulaciones-rol1-postulaciones` en `rol1` |
+| Ruta medida | `GET /postulaciones/mias` (estudiante). Va a `$LATEST`, no al alias `live` del canario |
+| Estado estable | Medido antes de la falla: p95 406 ms y 0,00 % de errores |
+| Hipótesis | Con 2 s de latencia en el 20 % de las invocaciones, el servicio sigue respondiendo sin errores (timeout de 10 s), la p95 sube a cerca de 2 s y, al apagar la falla, vuelve al estado estable |
+| Falla | Latencia fija de 2.000 ms |
+| Alcance | 20 % de las invocaciones de la función, 182 s, solo en `rol1` |
+| Mecanismo | failure-lambda con su configuración en SSM (`/ceibbo/rol1/failure-lambda`) |
+| Métricas | Estado y latencia de cada respuesta (cliente), inyecciones en CloudWatch Logs y alarma `ceibbo-rol1-api-5xx` |
+| Criterio de aprobación | Errores menores al 1 % durante la falla; p95 de recuperación de hasta 1,2 veces la estable (el mismo umbral del canario); sin cambios en los datos |
+| Criterio de aborto | Errores mayores al 10 % o la alarma de 5xx en ALARM |
+| Recuperación | Apagar la falla, esperar el TTL de caché (10 s), medir de nuevo y volver a desplegar en `rol1` el código de `develop` |
+
+| Dato | Resultado |
+|---|---|
+| Fecha y hora | 22-11-2026 19:00 |
+| Stage | `rol1` |
+| Versión desplegada | Rama `caos/F2-13a` (no integrada en `develop`) |
+| Duración real | Estable 120 s · falla 182 s · recuperación 120 s |
+| Solicitudes totales | 2.567 · 1.356 · 2.479 |
+| Solicitudes afectadas | 0 inyecciones registradas; 283 respuestas de 1.800 ms o más |
+| p95 antes/durante/después | 406 / 2.254 / 404 ms |
+| Errores antes/durante/después | 0,00 % / 0,00 % / 0,00 % |
+| Datos duplicados o corruptos | No: el estudiante tenía 2 postulaciones antes y después (la ruta solo lee) |
+| Alarma `ceibbo-rol1-api-5xx` | No pasó a ALARM (estado final: OK) |
+| Resultado | **NO CONCLUYENTE**: no se registraron inyecciones de latencia en los logs |
+
+Aprendizajes y acciones:
+
+- Se registraron 0 inyecciones de latencia en los logs, para 1.356 peticiones (con el 20 % se esperaban unas 271).
+- La p95 pasó de 406 ms a 2.254 ms con la falla activa y volvió a 404 ms al apagarla.
+- La alarma de 5xx no se activó: la latencia no produce errores mientras quede bajo el timeout de 10 s. Para detectar este tipo de falla hace falta una alarma de latencia (p95), que hoy no existe.
+- `failure-lambda` leyó su configuración desde SSM con LabRole: no fue necesario el plan B.
