@@ -234,16 +234,17 @@ Reglas obligatorias:
 | Versión desplegada | Rama `caos/F2-13a` (no integrada en `develop`) |
 | Duración real | Estable 120 s · falla 182 s · recuperación 120 s |
 | Solicitudes totales | 2.567 · 1.356 · 2.479 |
-| Solicitudes afectadas | 0 inyecciones registradas; 283 respuestas de 1.800 ms o más |
+| Solicitudes afectadas | 283 inyecciones registradas; 283 respuestas de 1.800 ms o más |
 | p95 antes/durante/después | 406 / 2.254 / 404 ms |
 | Errores antes/durante/después | 0,00 % / 0,00 % / 0,00 % |
 | Datos duplicados o corruptos | No: el estudiante tenía 2 postulaciones antes y después (la ruta solo lee) |
 | Alarma `ceibbo-rol1-api-5xx` | No pasó a ALARM (estado final: OK) |
-| Resultado | **NO CONCLUYENTE**: no se registraron inyecciones de latencia en los logs |
+| Resultado | **APROBADO** |
 
 Aprendizajes y acciones:
 
-- Se registraron 0 inyecciones de latencia en los logs, para 1.356 peticiones (con el 20 % se esperaban unas 271).
+- Se registraron 283 inyecciones de latencia en los logs, para 1.356 peticiones (con el 20 % se esperaban unas 271).
 - La p95 pasó de 406 ms a 2.254 ms con la falla activa y volvió a 404 ms al apagarla.
 - La alarma de 5xx no se activó: la latencia no produce errores mientras quede bajo el timeout de 10 s. Para detectar este tipo de falla hace falta una alarma de latencia (p95), que hoy no existe.
 - `failure-lambda` leyó su configuración desde SSM con LabRole: no fue necesario el plan B.
+- Nota: el script contó 0 inyecciones porque la consulta a CloudWatch Logs devolvió el conteo en dos páginas (283 y 0). Se corrigió con el conteo real del log: 283 inyecciones en 1.356 peticiones (20,9 %).
