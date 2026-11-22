@@ -2,7 +2,7 @@
 
 Plantilla de la tarea F2-06a (Rol 3). Junta en un solo lugar cada control de seguridad, dice si está **Implementado** o **Diseñado** y con qué se demuestra. El examen pide distinguir las dos cosas.
 
-- **Implementado:** está en el código o en la configuración y se puede mostrar. Lleva evidencia: archivo y línea (`infra/shared/serverless.yml:122`) o una captura.
+- **Implementado:** está en el código o en la configuración y se puede mostrar. Lleva evidencia: archivo y línea (`infra/shared/serverless.yml:127`) o una captura.
 - **Diseñado:** está pensado, pero no se construyó por tiempo o por una restricción del Learner Lab. Lleva por qué no se hizo y cómo se haría.
 
 ## Cómo se completa
@@ -20,20 +20,21 @@ Lo que ya trae esta plantilla son **hechos del código**, con su archivo y líne
 | # | Control | Qué protege | Estado hoy | Evidencia o qué falta |
 |---|---|---|---|---|
 | 1 | Identidad con Cognito | Saber quién es cada usuario | Implementado | `infra/shared/serverless.yml:60-100` |
-| 2 | Autorizador JWT en el API | Que nadie sin token llegue a una Lambda | Implementado | `infra/shared/serverless.yml:121-133` y cada `services/*/serverless.yml` |
+| 2 | Autorizador JWT en el API | Que nadie sin token llegue a una Lambda | Implementado | `infra/shared/serverless.yml:126-138` y cada `services/*/serverless.yml` |
 | 3 | Autorización por grupo y por dueño | Que cada actor haga solo lo suyo | Por confirmar en la sección 2 | Adaptador de entrada de cada servicio |
 | 4 | Validación de entradas HTTP | Datos malformados o maliciosos | Por confirmar en la sección 2 | Dominio de cada servicio |
 | 5 | Validación de mensajes de la cola | Mensajes con formato inválido | Por confirmar | Los contratos existen en `contracts/eventos/*.json` |
 | 6 | Cifrado en tránsito | Que nadie lea el tráfico | Implementado por AWS | Sección 5 |
 | 7 | Cifrado en reposo | Los datos guardados | Implementado por AWS (claves de AWS) | Sección 5. Claves propias en KMS: Diseñado |
 | 8 | URLs firmadas para archivos | Subir y bajar archivos sin abrir el bucket | Diseñado | Sección 6 |
-| 9 | CORS restringido | Que otro sitio no use la API desde un navegador | Diseñado, pasa a Implementado con F2-15a | Hoy `'*'` en `infra/shared/serverless.yml:45` y `:109` |
-| 10 | Throttling | Ráfagas y abuso | Diseñado, pasa a Implementado con F2-15a | `infra/shared/serverless.yml:113-118` no tiene límites |
+| 9 | CORS restringido | Que otro sitio no use la API desde un navegador | Implementado (F2-15a) | Solo `http://localhost:3000` en `infra/shared/serverless.yml:45` y `:109` |
+| 10 | Throttling | Ráfagas y abuso | Implementado (F2-15a) | 50 solicitudes por segundo y ráfaga de 100 en `infra/shared/serverless.yml:121-123` |
 | 11 | Secretos fuera del código | Credenciales | Implementado (no hay secretos en el repositorio) | Sección 9. Secrets Manager: Diseñado |
 | 12 | WAF | Ataques web comunes | Diseñado | Sección 10 |
 | 13 | Mínimo privilegio en IAM | Que una Lambda comprometida no pueda tocarlo todo | Diseñado (hoy todas usan LabRole) | Sección 11 |
 | 14 | Comunicación entre servicios | Las llamadas internas | Diseñado (hoy se reenvía el token del usuario) | Sección 12 |
 | 15 | CI/CD sin credenciales guardadas (OIDC) | Que no se filtren llaves de AWS | Diseñado (hoy el CI no despliega) | Sección 13 |
+| 16 | Alarmas de CloudWatch | Detectar errores, mensajes perdidos y saturación | Implementado (F2-01r), sin notificación | `infra/shared/serverless.yml:140-188`. Aviso por SNS o correo: Diseñado |
 
 ## 2. Rutas por servicio
 
@@ -54,21 +55,40 @@ Ejemplo del formato:
 
 | Ruta | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
-| `GET /health` | público, a propósito | | | | |
-| `GET /health/privado` | cualquiera con token | | | | |
+| `GET /health` | público, a propósito: es la sonda de salud (`services/health/serverless.yml:33-35`, sin autorizador) | No aplica. Solo responde `estado`, `baseDatos` y `fecha`, sin datos de usuarios (`src/application/verificarSalud.mjs:5-9`) | No recibe datos. Si DynamoDB no responde, 503 (`src/adapters/in/http.mjs:16`) | `dynamodb:GetItem` sobre la tabla, limitado al ítem `HEALTH` con la condición `dynamodb:LeadingKeys` | Implementado (`test/verificarSalud.test.mjs:13-23`) |
+| `GET /health/privado` | cualquiera con token; no exige grupo | Autorizador JWT (`services/health/serverless.yml:36-41`). El handler solo lee los claims que ya validó el autorizador (`src/adapters/in/http.mjs:10-13`) | No recibe datos. Devuelve solo el `sub` y los grupos del propio token | El mismo `dynamodb:GetItem` | Implementado (sin token, 401 del autorizador; se prueba con la colección de `docs/postman/`) |
+
+Los archivos de la tabla son relativos a `services/health/`. Rol ideal de la función `health` (Diseñado; hoy usa LabRole): `dynamodb:GetItem` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>` con `ForAllValues:StringEquals` `dynamodb:LeadingKeys` = `HEALTH`, y `logs:CreateLogStream` y `logs:PutLogEvents` sobre `/aws/lambda/ceibbo-health-<stage>-health`. `GET /health` es pública a propósito: no expone datos y sirve para saber si la plataforma responde. Con el throttling del stage (sección 8) tampoco se puede usar para saturar la cuenta.
 
 ### postulaciones (José)
 
 | Ruta | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
-| `POST /oportunidades` | empresa | | | | |
-| `GET /oportunidades` (canario, alias `live`) | todos | | | | |
-| `GET /oportunidades/mias` | empresa | | | | |
-| `POST /oportunidades/{id}/postulaciones` | estudiante | | | | |
-| `GET /oportunidades/{id}/postulaciones` | empresa dueña | | | | |
-| `GET /postulaciones/mias` | estudiante | | | | |
+| `POST /oportunidades` | empresa | `src/application/postulaciones.mjs:20` (`exigirGrupo`, líneas 8-11). La `empresaId` sale del token, nunca del cuerpo (`:21`) | JSON válido, si no 400 (`src/adapters/in/http.mjs:16-24`). Lista blanca de campos: mandar `empresaId` o `activa` da 400 (`src/domain/Oportunidad.mjs:5`, `:19-20`). `tipo` de una lista cerrada; `remoto` booleano; `titulo` (hasta 120) y `descripcion` (hasta 2000) obligatorios (`:21-30`) | `dynamodb:PutItem` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:16-27`, `test/dominio.test.mjs:9-32`, `test/http.test.mjs:28`) |
+| `GET /oportunidades` (canario, alias `live`) | todos con token, de cualquier grupo | Autorizador JWT de la ruta que crea `scripts/canario/canario-servicio.sh:128-144`. El caso de uso exige usuario (`src/application/postulaciones.mjs:28`) | `tipo` de la lista cerrada y `remoto` `true` o `false`, si no 400 (`:29-34`). Solo devuelve ofertas activas (`:36-39`) | `dynamodb:Query` sobre el índice `GSI1`. Además, el permiso de API Gateway para invocar la función queda limitado al alias `live` (`--qualifier`, `scripts/canario/canario-servicio.sh:152`) | Implementado (`test/casosDeUso.test.mjs:82-105`) |
+| `GET /oportunidades/mias` | empresa | `src/application/postulaciones.mjs:43`. Filtra por la `empresaId` del token (`src/adapters/out/dynamoRepositorioPostulaciones.mjs:65-73`) | No recibe datos | `dynamodb:Query` sobre el índice `GSI1` | Implementado (`test/casosDeUso.test.mjs:16-23`) |
+| `POST /oportunidades/{id}/postulaciones` | estudiante | `src/application/postulaciones.mjs:48`. El `estudianteId` sale del token (`:50`) | Oferta inexistente: 404 (`:13-16`). Oferta cerrada: 409 (`src/domain/Postulacion.mjs:5`). Postulación repetida: 409, con `Put` condicional `attribute_not_exists(PK)` (`src/adapters/out/dynamoRepositorioPostulaciones.mjs:75-93`) | `dynamodb:GetItem` y `dynamodb:PutItem` sobre la tabla; `sqs:SendMessage` sobre `EventsQueue` | Implementado (`test/casosDeUso.test.mjs:29-70`, `test/http.test.mjs:14`) |
+| `GET /oportunidades/{id}/postulaciones` | empresa dueña | `src/application/postulaciones.mjs:71-73`: grupo `empresa` **y** la `empresaId` de la oferta igual al `sub` del token. Si no, 403 | Oferta inexistente: 404 | `dynamodb:GetItem` sobre la tabla; `dynamodb:Query` sobre la tabla | Implementado (`test/casosDeUso.test.mjs:72-80`) |
+| `GET /postulaciones/mias` | estudiante, cada uno las suyas | `src/application/postulaciones.mjs:66`. Solo consulta `STUDENT#<sub del token>` (`src/adapters/out/dynamoRepositorioPostulaciones.mjs:95-102`) | No recibe datos | `dynamodb:Query` sobre el índice `GSI1` | Implementado (`test/casosDeUso.test.mjs:34`) |
 
-`GET /oportunidades` no está en `serverless.yml`: la crea `scripts/canario/canario-servicio.sh` (D-03), también con el autorizador JWT (líneas 128-144).
+`GET /oportunidades` no está en `serverless.yml`: la crea `scripts/canario/canario-servicio.sh` (D-03), también con el autorizador JWT (líneas 128-144). Los archivos de la tabla son relativos a `services/postulaciones/`.
+
+En todas las rutas:
+
+- Sin token, el autorizador responde 401 antes de llegar a la Lambda. El usuario y su grupo salen de los claims ya validados (`src/adapters/in/http.mjs:9-14`), y sin usuario la respuesta es 403 (`src/application/postulaciones.mjs:9`, prueba en `test/http.test.mjs:33`).
+- Un error inesperado responde 500 sin detalles; el detalle queda solo en el log (`src/adapters/in/http.mjs:61-65`, prueba en `test/http.test.mjs:38`).
+- Los valores del usuario llegan a DynamoDB como parámetros del SDK, nunca dentro del texto de la consulta, así que no hay inyección.
+- Toda respuesta trae `X-App-Version` con el número de versión de la Lambda (`src/adapters/in/http.mjs:32`). Es para medir el canario; no expone datos del usuario ni de la cuenta.
+
+Rol ideal de la función `postulaciones` (Diseñado; hoy usa LabRole). IAM se asigna por función, no por ruta, así que el rol junta lo de las seis rutas:
+
+- `dynamodb:GetItem`, `dynamodb:PutItem` y `dynamodb:Query` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>`.
+- `dynamodb:Query` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>/index/GSI1`.
+- `sqs:SendMessage` sobre el ARN de `EventsQueue` (output `EventsQueueArn` de `infra/shared`).
+- `logs:CreateLogStream` y `logs:PutLogEvents` sobre `/aws/lambda/ceibbo-postulaciones-<stage>-postulaciones`.
+- Ninguna ruta necesita `Scan`, `UpdateItem`, `DeleteItem` ni S3.
+
+Pendientes que no son de autorización: si SQS falla después de guardar la postulación, el evento se pierde y solo queda en el log (`src/application/postulaciones.mjs:55-61`). Se resuelve con el patrón Outbox. Además, `GET /oportunidades/mias` lee la partición `OPPORTUNITIES` y filtra por empresa; con muchas ofertas convendría una clave propia por empresa en `GSI1`. Es una mejora de rendimiento, no de seguridad.
 
 ### habilidades (Ian)
 
@@ -138,11 +158,12 @@ La cola no tiene una política propia (`infra/shared/serverless.yml:52-58`): cua
 
 | Recurso | Control que tiene hoy | Estado | Diseño ideal |
 |---|---|---|---|
-| Tabla `ceibbo-app-<stage>` | Cifrado por defecto de DynamoDB | Implementado por AWS | |
-| Bucket de archivos | Bloqueo total de acceso público (`:37-41`); CORS `'*'` (`:42-46`) | Implementado / Diseñado | |
-| `EventsQueue` y `EventsDLQ` | DLQ tras 5 intentos (`:56-58`) | Implementado | |
-| User pool y app client | Ver sección 3 | Implementado | |
-| HTTP API y stage | Autorizador JWT; CORS `'*'`; sin throttling | Implementado / Diseñado | |
+| Tabla `ceibbo-app-<stage>` | Cifrado por defecto de DynamoDB | Implementado por AWS | Claves propias en KMS si hay que controlarlas; acceso solo desde los roles de cada función (sección 11) |
+| Bucket de archivos | Bloqueo total de acceso público (`:37-41`); CORS solo `http://localhost:3000` (`:42-46`) | Implementado (F2-15a) | URLs firmadas de corta duración (sección 6) y una política del bucket que rechace lo que no llegue por HTTPS (`aws:SecureTransport`) |
+| `EventsQueue` y `EventsDLQ` | DLQ tras 5 intentos (`:56-58`); alarma si llega algo a la DLQ (`:158-172`) | Implementado | Política de la cola que deje `sqs:SendMessage` solo a postulaciones y habilidades (ver notificaciones) |
+| User pool y app client | Ver sección 3 | Implementado | Ver sección 3 |
+| HTTP API y stage | Autorizador JWT (`:126-138`); CORS solo `http://localhost:3000` (`:109`); throttling de 50 solicitudes por segundo y ráfaga de 100 (`:121-123`); alarma de 5xx (`:142-156`) | Implementado (F2-15a y F2-01r) | WAF con CloudFront o REST API (sección 10); límites más bajos para las rutas de escritura |
+| Alarmas | 5xx del API, mensajes en la DLQ y throttles de postulaciones (`:140-188`) | Implementado (F2-01r) | Una acción SNS que avise al equipo por correo; hoy el estado se mira en la consola |
 
 ## 3. Identidad (Cognito)
 
@@ -167,7 +188,7 @@ Para cerrar el diseño (F2-06b):
 
 Hoy en el código:
 
-- El **autorizador JWT** revisa la firma, el emisor (el user pool) y la audiencia (el app client) antes de invocar la Lambda. Sin token válido, API Gateway responde 401 y la Lambda no se ejecuta (`infra/shared/serverless.yml:121-133`).
+- El **autorizador JWT** revisa la firma, el emisor (el user pool) y la audiencia (el app client) antes de invocar la Lambda. Sin token válido, API Gateway responde 401 y la Lambda no se ejecuta (`infra/shared/serverless.yml:126-138`).
 - **Todas las rutas** pasan por el autorizador, salvo `GET /health`, que es pública a propósito.
 - El **grupo y el dueño** los revisa cada servicio leyendo `cognito:groups`: `services/perfiles/src/adapters/in/http.mjs:43`, `services/habilidades/src/adapters/in/http.js:20` y `services/postulaciones/src/adapters/in/http.mjs:12`. El detalle por ruta va en la sección 2.
 - Los **mensajes de la cola** tienen contrato en `contracts/eventos/*.json` (JSON Schema). Falta confirmar si alguien los valida al recibirlos. En notificaciones (F2-02), un mensaje inválido vuelve en `batchItemFailures` y termina en la DLQ.
@@ -183,20 +204,22 @@ Material del ramo: el manual de Serverless (sección 8) pide validar los *payloa
 ## 6. Archivos y URLs firmadas
 
 - El bucket **bloquea todo acceso público** (`infra/shared/serverless.yml:37-41`). Implementado.
-- Su CORS permite `PUT` y `GET` desde cualquier origen (`:42-46`). Se restringe en F2-15a.
+- Su CORS permite `PUT` y `GET` solo desde `http://localhost:3000` (`:42-46`), desde F2-15a.
 - **No hay código que genere URLs firmadas.** La subida de evidencias con URL firmada (patrón Valet Key) queda como diseño (plan de cierre, sección 7, F2-16).
 - Para cerrar el diseño: qué servicio firma la URL, cuánto dura y bajo qué ruta del bucket queda cada archivo.
 
 ## 7. CORS
 
-- Hoy: `AllowOrigins: ['*']` en el API (`infra/shared/serverless.yml:109`) y en el bucket (`:45`). Los métodos y las cabeceras ya están acotados (`:110-111`).
-- F2-15a (José) cambia `'*'` por el origen del frontend, `http://localhost:3000`.
+- **Implementado (F2-15a):** `AllowOrigins: ['http://localhost:3000']` en el API (`infra/shared/serverless.yml:109`) y en el bucket (`:45`). Antes era `'*'`. Los métodos y las cabeceras ya estaban acotados (`:110-111`).
+- El frontend corre en local, por eso el único origen es `http://localhost:3000`. Si se publica (Amplify o Vercel), se agrega ese dominio.
 - CORS solo lo aplican los navegadores. Postman o `curl` lo ignoran, así que no es control de acceso: lo que protege de verdad es el autorizador JWT.
 
 ## 8. Throttling
 
-- Hoy: el stage (`infra/shared/serverless.yml:113-118`) no define límites, así que rigen los límites por defecto de la cuenta. Confirmar el valor en la documentación de AWS.
-- F2-15a (José) agrega `ThrottlingRateLimit: 50` y `ThrottlingBurstLimit: 100`. Son valores propuestos por el equipo, no de una fuente. Lo que pase del límite recibe un 429.
+- **Implementado (F2-15a):** el stage define `ThrottlingRateLimit: 50` y `ThrottlingBurstLimit: 100` para todas sus rutas (`infra/shared/serverless.yml:121-123`). Son valores propuestos por el equipo, no de una fuente.
+- Antes solo regía el límite de la cuenta: según AWS, 10.000 solicitudes por segundo con una ráfaga de 5.000, compartidas por todas las APIs de la cuenta en la región. Un solo cliente podía gastarse esa cuota.
+- Lo que pasa del límite recibe `429 Too Many Requests` y no llega a la Lambda, así que tampoco gasta invocaciones.
+- Para medir: la prueba de carga (F2-14) muestra si el límite interfiere con el uso normal.
 - Material del ramo: la guía del Control 1 define throttling como la "limitación de la tasa de solicitudes procesadas".
 
 ## 9. Secretos
@@ -258,3 +281,6 @@ Candidatos: robo del token desde el navegador, permisos amplios de LabRole, CORS
 
 - Material del ramo: guía de estudio del Control 1 (sección 3.4, Seguridad); manual de Serverless Framework (secciones 8 y 9); manual de AWS SAM (buenas prácticas de seguridad); LAB de Desarrollo Cloud (LabRole).
 - Documentación de AWS por citar en APA (F2-19b): vida de los tokens de Cognito, cifrado en reposo de DynamoDB, cifrado por defecto de S3, cifrado de SQS, throttling del HTTP API y recursos que protege AWS WAF.
+- Throttling del HTTP API: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-throttling.html y límite de la cuenta (10.000 por segundo, ráfaga de 5.000): https://repost.aws/knowledge-center/api-gateway-429-limit
+- Condición `dynamodb:LeadingKeys` (acceso por clave de partición): https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/specifying-conditions.html
+- Alarmas de CloudFormation: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-alarm.html
