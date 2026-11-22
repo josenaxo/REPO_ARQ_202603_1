@@ -131,6 +131,56 @@ resources:
           Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
           Audience:
             - !Ref UserPoolClient
+
+    # Alarmas base (F2-01r): condición de parada de los experimentos de caos.
+    # Sin acciones (no hay SNS): el estado se mira en la consola, CloudWatch > Alarms.
+    AlarmaApi5xx:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-api-5xx
+        Namespace: AWS/ApiGateway
+        MetricName: 5xx # errores del lado del servidor del HTTP API
+        Dimensions:
+          - Name: ApiId
+            Value: !Ref HttpApi
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching # sin tráfico no es una falla
+
+    AlarmaDlq:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-dlq
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible # mensajes que fallaron 5 veces
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt EventsDLQ.QueueName
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+
+    AlarmaThrottlesPostulaciones:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-throttles-postulaciones
+        Namespace: AWS/Lambda
+        MetricName: Throttles # invocaciones rechazadas por falta de concurrencia
+        Dimensions:
+          - Name: FunctionName # por función: no hay documentación de un total sin dimensión
+            Value: ceibbo-postulaciones-${sls:stage}-postulaciones
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
   
   # Directorio: valores que leen los servicios con ${cf:ceibbo-shared-<stage>.Nombre}
   Outputs:
