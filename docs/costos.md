@@ -190,3 +190,16 @@ Después de un mes real, reemplazar los supuestos con:
 - Cognito MAU del User Pool.
 - Cost Explorer con tags `service`, `stage` y `owner`.
 
+
+### Validación de postulaciones con la prueba de carga (F2-14, José)
+
+Medido en `rol1` el 22-11-2026, nivel de 10 peticiones simultáneas sobre `GET /oportunidades` (ver `docs/carga.md`):
+
+| Dato | Supuesto de esta estimación | Medido |
+|---|---:|---:|
+| Duración promedio de la Lambda de postulaciones | 140 ms | 14,1 ms (p95 421,5 ms) |
+| GB-segundos de postulaciones, escenario esperado (200.000 invocaciones, 256 MB) | 7.000 | 705 |
+| RCU de DynamoDB por petición de `GET /oportunidades` | 1,5 (300.000 RRU / 200.000 solicitudes) | s/d |
+
+- La duración real es menor o igual a la supuesta: la estimación de cómputo de postulaciones es conservadora. Queda dentro de la franquicia mensual de 400.000 GB-segundos de Lambda.
+- La medición incluye arranques en frío y usa pocos datos en la tabla: `GET /oportunidades` lee la partición `OPPORTUNITIES`, así que sus RCU crecen con la cantidad de ofertas activas.
