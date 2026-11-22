@@ -5,13 +5,16 @@ Plantilla de la tarea F2-06a (Rol 3). Junta en un solo lugar cada control de seg
 - **Implementado:** está en el código o en la configuración y se puede mostrar. Lleva evidencia: archivo y línea (`infra/shared/serverless.yml:127`) o una captura.
 - **Diseñado:** está pensado, pero no se construyó por tiempo o por una restricción del Learner Lab. Lleva por qué no se hizo y cómo se haría.
 
-## Cómo se completa
+## Estado del documento
 
-| Qué | Quién | Hasta |
+| Parte | Quién | Estado |
 |---|---|---|
-| Tabla de rutas de sus servicios (sección 2) | José: health, postulaciones e infra/shared · Ian: habilidades · Matías: perfiles y notificaciones | Dom 22, 20:00 (F2-10) |
-| Pasar CORS y throttling a Implementado (secciones 7 y 8) | José, al terminar F2-15a | Dom 22, 20:00 |
-| Integrar los aportes y cerrar el diseño ideal | Matías | Lun 23, 12:00 (F2-06b) |
+| Plantilla (F2-06a) | Matías | Hecha el 21-11 |
+| Filas de perfiles y notificaciones (F2-10) | Matías | Hechas el 22-11 |
+| Filas de health, postulaciones e infra/shared (F2-10) | José | Hechas el 22-11 |
+| Seguridad de habilidades (F2-10) | Ian, la matriz de amenazas; Matías, la tabla por ruta, sacada del código | Hecha el 22-11. Ian confirma la tabla por ruta |
+| CORS y throttling (F2-15a) y alarmas (F2-01r) | José | Implementados el 22-11 |
+| Cierre: resumen, diseño ideal y riesgos (F2-06b) | Matías | Hecho el 22-11 |
 
 Lo que ya trae esta plantilla son **hechos del código**, con su archivo y línea. La redacción del informe la hace cada uno con sus palabras.
 
@@ -21,9 +24,9 @@ Lo que ya trae esta plantilla son **hechos del código**, con su archivo y líne
 |---|---|---|---|---|
 | 1 | Identidad con Cognito | Saber quién es cada usuario | Implementado | `infra/shared/serverless.yml:60-100` |
 | 2 | Autorizador JWT en el API | Que nadie sin token llegue a una Lambda | Implementado | `infra/shared/serverless.yml:126-138` y cada `services/*/serverless.yml` |
-| 3 | Autorización por grupo y por dueño | Que cada actor haga solo lo suyo | Por confirmar en la sección 2 | Adaptador de entrada de cada servicio |
-| 4 | Validación de entradas HTTP | Datos malformados o maliciosos | Por confirmar en la sección 2 | Dominio de cada servicio |
-| 5 | Validación de mensajes de la cola | Mensajes con formato inválido | Por confirmar | Los contratos existen en `contracts/eventos/*.json` |
+| 3 | Autorización por grupo y por dueño | Que cada actor haga solo lo suyo | Implementado en los cinco servicios | Sección 2: cada ruta con su archivo y línea |
+| 4 | Validación de entradas HTTP | Datos malformados o maliciosos | Implementado | Dominio de cada servicio (sección 2). Mejora pendiente en habilidades: largo máximo del nombre |
+| 5 | Validación de mensajes de la cola | Mensajes con formato inválido | Implementado en el consumidor de notificaciones | `services/notificaciones/src/domain/Notificacion.mjs:34-45`; un mensaje inválido termina en la DLQ. Validar contra los JSON Schema de `contracts/eventos/`: Diseñado |
 | 6 | Cifrado en tránsito | Que nadie lea el tráfico | Implementado por AWS | Sección 5 |
 | 7 | Cifrado en reposo | Los datos guardados | Implementado por AWS (claves de AWS) | Sección 5. Claves propias en KMS: Diseñado |
 | 8 | URLs firmadas para archivos | Subir y bajar archivos sin abrir el bucket | Diseñado | Sección 6 |
@@ -94,12 +97,33 @@ Pendientes que no son de autorización: si SQS falla después de guardar la post
 
 | Ruta | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
-| `POST /habilidades` | estudiante | | | | |
-| `GET /habilidades/me` | estudiante | | | | |
-| `GET /habilidades/pendientes` | colegio | | | | |
-| `PATCH /habilidades/{estudianteId}/{habilidadId}` | colegio dueño | | | | |
+| `POST /habilidades` | estudiante | `src/application/servicioHabilidades.js:22` (grupo del token) y `:23` (el perfil tiene que ser de estudiante y tener colegio, `:12-16`). El `estudianteId` sale del token y el `colegioId` del perfil, nunca del cuerpo (`:24`) | JSON válido, si no 400 (`src/adapters/in/http.js:27-35`). `nombre` obligatorio; `categoria` de una lista cerrada (`TECNICA`, `BLANDA` o `CERTIFICACION`); `nivel` entero de 1 a 5 (`src/domain/HabilidadEstudiante.js:9-15`). Si no, 400. Habilidad repetida: 409, con `Put` condicional `attribute_not_exists(PK)` (`src/adapters/out/dynamoRepositorioHabilidades.js:20-23`) | `dynamodb:PutItem` sobre la tabla | Implementado (`test/servicioHabilidades.test.js:38` y `:45`) |
+| `GET /habilidades/me` | estudiante, cada uno las suyas | `src/application/servicioHabilidades.js:27`. Solo consulta `USER#<sub del token>` (`:28` y `src/adapters/out/dynamoRepositorioHabilidades.js:27-35`) | No recibe datos | `dynamodb:Query` sobre la tabla | Implementado |
+| `GET /habilidades/pendientes` | colegio | `src/application/servicioHabilidades.js:31-32`: grupo `colegio` y perfil de colegio. Consulta `SCHOOL#<colegioId del perfil>` en `GSI1` (`:33` y `src/adapters/out/dynamoRepositorioHabilidades.js:36-44`) | No recibe datos | `dynamodb:Query` sobre el índice `GSI1` | Implementado (`test/servicioHabilidades.test.js:85`) |
+| `PATCH /habilidades/{estudianteId}/{habilidadId}` | colegio dueño | `src/application/servicioHabilidades.js:36-40`: grupo `colegio`, perfil de colegio y la habilidad tiene que ser de su mismo colegio. Si no, 403 | `estado` solo `validada` o `rechazada`, si no 400; una habilidad ya revisada da 409 (`src/domain/HabilidadEstudiante.js:29-31`). Habilidad inexistente: 404 (`src/application/servicioHabilidades.js:39`). `HabilidadValidada` se publica después de guardar y solo si se validó (`:41-48`) | `dynamodb:GetItem` y `dynamodb:PutItem` sobre la tabla; `sqs:SendMessage` sobre `EventsQueue` | Implementado (`test/servicioHabilidades.test.js:55` y `:70`) |
 
-Pendiente: completar esta tabla por ruta con archivo y línea, como las de los otros servicios. Mientras tanto, la matriz de Ian cubre el servicio completo (subida primero a `main` en el commit `e312c47` y traída aquí al juntar `main` con `develop`).
+Los archivos de la tabla son relativos a `services/habilidades/`. La tabla la completó el Rol 3 a partir del código (F2-06b; plan de cierre, sección 3.2), y Ian la confirma. Debajo va la matriz de amenazas de Ian.
+
+En todas las rutas:
+
+- Sin token, el autorizador responde 401 (`serverless.yml:22-40`). El usuario y su grupo salen de los claims ya validados (`src/adapters/in/http.js:14-23`), y sin usuario la respuesta es 403 (`src/application/servicioHabilidades.js:8-10`).
+- Un error inesperado responde 500 con un mensaje genérico; el detalle queda solo en el log (`src/adapters/in/http.js:56-60`, prueba en `test/http.test.js:39`).
+- Para saber el colegio, el servicio llama a `GET /perfiles/me` reenviando el token del usuario (`src/adapters/out/httpLectorPerfiles.js:14-16`, prueba en `test/http.test.js:49`). La llamada no tiene un timeout propio: si perfiles no responde, la función espera hasta su límite de 15 s (`serverless.yml:21`).
+
+Rol ideal de la función `habilidades` (Diseñado; hoy usa LabRole):
+
+- `dynamodb:GetItem`, `dynamodb:PutItem` y `dynamodb:Query` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>`.
+- `dynamodb:Query` sobre `arn:aws:dynamodb:us-east-1:<cuenta>:table/ceibbo-app-<stage>/index/GSI1`.
+- `sqs:SendMessage` sobre el ARN de `EventsQueue` (output `EventsQueueArn` de `infra/shared`).
+- `logs:CreateLogStream` y `logs:PutLogEvents` sobre `/aws/lambda/ceibbo-habilidades-<stage>-habilidades`.
+- Solo si se usa failure-lambda: `ssm:GetParameter` sobre el parámetro de caos del stage.
+
+Mejoras que aparecen al revisar el código (Diseñado):
+
+- En `PATCH`, el 404 se responde antes de revisar el colegio (`src/application/servicioHabilidades.js:39-40`), así que otro colegio puede saber si una habilidad existe. perfiles y notificaciones responden igual en los dos casos.
+- La decisión se guarda con un `Put` sin condición (`src/adapters/out/dynamoRepositorioHabilidades.js:53-58`): si dos revisiones llegan al mismo tiempo, las dos pasan la regla del dominio y la segunda pisa a la primera. Se resuelve con una `ConditionExpression` que exija `estado = declarada`.
+- `nombre` no tiene largo máximo (`src/domain/HabilidadEstudiante.js:10`).
+- Si SQS falla después de guardar la decisión, el evento se pierde (`src/application/servicioHabilidades.js:41-48`). Igual que en postulaciones, se resuelve con el patrón Outbox.
 
 La matriz identifica los activos, amenazas, controles existentes, evidencia y riesgo residual de cada servicio. Los controles se evalúan en API Gateway, Lambda, Cognito, DynamoDB, SQS y el código del dominio.
 
@@ -257,11 +281,10 @@ Hoy en el código:
 - El login responde el **mismo mensaje** si el correo no existe o si la contraseña está mal, para no revelar qué correos tienen cuenta (`frontend/src/lib/cognito.ts`).
 - El frontend maneja la sesión con Amplify. Por defecto, Amplify guarda los tokens en el `localStorage` del navegador. Confirmar.
 
-Para cerrar el diseño (F2-06b):
+Diseñado (F2-06b):
 
-- Desactivar `ALLOW_USER_PASSWORD_AUTH` en `demo` con un parámetro por stage. Hoy no se puede, porque `scripts/aws/token.sh` y las mediciones del canario dependen de él (plan de cierre, F2-15a).
-- ¿MFA para las cuentas de colegio y empresa?
-- ¿Tokens de acceso más cortos y revocación del refresco al cerrar sesión?
+- Apagar `ALLOW_USER_PASSWORD_AUTH` en `demo` con un parámetro por stage. No se implementó porque `scripts/aws/token.sh` y las mediciones del canario dependen de ese flujo (plan de cierre, F2-15a).
+- MFA para las cuentas de colegio y empresa, que administran datos de otros usuarios. No se implementó porque cambia el flujo de inicio de sesión del frontend.
 
 ## 4. Autorización y validación
 
@@ -270,7 +293,7 @@ Hoy en el código:
 - El **autorizador JWT** revisa la firma, el emisor (el user pool) y la audiencia (el app client) antes de invocar la Lambda. Sin token válido, API Gateway responde 401 y la Lambda no se ejecuta (`infra/shared/serverless.yml:126-138`).
 - **Todas las rutas** pasan por el autorizador, salvo `GET /health`, que es pública a propósito.
 - El **grupo y el dueño** los revisa cada servicio leyendo `cognito:groups`: `services/perfiles/src/adapters/in/http.mjs:43`, `services/habilidades/src/adapters/in/http.js:20` y `services/postulaciones/src/adapters/in/http.mjs:12`. El detalle por ruta va en la sección 2.
-- Los **mensajes de la cola** tienen contrato en `contracts/eventos/*.json` (JSON Schema). Falta confirmar si alguien los valida al recibirlos. En notificaciones (F2-02), un mensaje inválido vuelve en `batchItemFailures` y termina en la DLQ.
+- Los **mensajes de la cola** tienen contrato en `contracts/eventos/*.json` (JSON Schema). Los arma el código de postulaciones y habilidades, no el usuario. El consumidor de notificaciones revisa los campos que pide cada tipo (`services/notificaciones/src/domain/Notificacion.mjs:34-45`): un mensaje inválido vuelve en `batchItemFailures` y, después de 5 intentos, termina en la DLQ, que tiene alarma (F2-01r). Validar con los mismos JSON Schema: Diseñado.
 
 Material del ramo: el manual de Serverless (sección 8) pide validar los *payloads* "para entradas HTTP y mensajes".
 
@@ -350,11 +373,14 @@ Alimenta la tabla 4.1 del informe, que pide estas mismas columnas.
 
 | ID | Riesgo | Probabilidad | Impacto | Mitigación | Relación con experimento de caos |
 |---|---|---|---|---|---|
-| RS-01 | | | | | |
-| RS-02 | | | | | |
-| RS-03 | | | | | |
+| RS-01 | LabRole da a cada función más permisos de los que necesita: una función comprometida podría leer o borrar datos de otros servicios | Media | Alto | Se acepta solo en el Learner Lab. Diseño: un rol por función con los permisos de la sección 2 | No aplica |
+| RS-02 | Robo del token desde el navegador: Amplify guarda los tokens en el navegador y un XSS podría leerlos | Baja | Alto | React escapa el contenido (el frontend no usa `dangerouslySetInnerHTML`) y perfiles rechaza enlaces que no sean `http(s)`, como `javascript:`. El token de acceso dura 1 hora. Diseño: MFA para colegio y empresa | No aplica |
+| RS-03 | El flujo `USER_PASSWORD_AUTH` sigue abierto en `demo` | Media | Medio | Contraseñas con la política de Cognito. Diseño: apagarlo en `demo` con un parámetro por stage (sección 3) | No aplica |
+| RS-04 | Eventos falsos en `EventsQueue`: cualquiera con permisos de SQS en la cuenta puede publicar, y el consumidor confía en el `destinatarioId` | Baja | Medio | El consumidor valida cada mensaje y los inválidos terminan en la DLQ, que tiene alarma. Diseño: una política de la cola que deje publicar solo a postulaciones y habilidades | F2-13c: el consumidor falla en todas sus invocaciones y el mensaje tiene que terminar en la DLQ sin perderse |
+| RS-05 | Una ráfaga de solicitudes satura la concurrencia de la cuenta | Media | Medio | Throttling del stage (50 por segundo, ráfaga de 100) y alarmas de 5xx y throttles (F2-15a y F2-01r) | F2-13a (latencia en postulaciones) usa esas alarmas como condición de parada; la prueba de carga (F2-14) mide el límite |
+| RS-06 | Si perfiles falla o se pone lento, habilidades no puede declarar ni validar: la llamada reenvía el token y no tiene timeout propio | Media | Medio | El error vuelve controlado al usuario. Diseño: un timeout corto en la llamada y una copia local del perfil con el evento `PerfilActualizado` (sección 12) | Ningún experimento lo prueba todavía; serviría inyectar latencia en perfiles |
 
-Candidatos: robo del token desde el navegador, permisos amplios de LabRole, CORS abierto, ráfaga de solicitudes sin throttling y el flujo `USER_PASSWORD_AUTH` en `demo`.
+La probabilidad y el impacto son una estimación del equipo. La matriz de Ian (sección 2, habilidades) agrega los riesgos propios de ese servicio.
 
 ## Fuentes
 
