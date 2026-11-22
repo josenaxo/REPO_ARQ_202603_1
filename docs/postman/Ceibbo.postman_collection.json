@@ -1,17 +1,17 @@
 {
   "info": {
-    "name": "Ceibbo · API (demo)",
-    "description": "Todos los endpoints del backend de Ceibbo (19 rutas en 4 servicios), según contracts/api/*.yaml.\n\nUso:\n1. En la pestaña Variables de la colección, escribir la contraseña de prueba en el *Current value* de `password` (no se guarda en el repositorio).\n2. Ejecutar la carpeta **0 · Login** (guarda un token por tipo de usuario).\n3. Ejecutar las demás carpetas en orden. Los ids se guardan solos en variables.\n\n`baseUrl` y `clientId` apuntan al stage demo. Para otro stage, cambiarlos con los outputs de ceibbo-shared-<stage>.",
+    "name": "Ceibbo · API (rol2)",
+    "description": "Todos los endpoints del backend de Ceibbo (19 rutas en 4 servicios), según contracts/api/*.yaml.\n\nUso:\n1. En la pestaña Variables de la colección, escribir el output `UserPoolClientId` de `ceibbo-shared-rol2` en `clientId` y la contraseña de prueba en `password` (no se guardan en el repositorio).\n2. Ejecutar la carpeta **0 · Login** (guarda un token por tipo de usuario).\n3. Ejecutar las demás carpetas en orden. Los ids se guardan solos en variables.\n\n`baseUrl` apunta al stage rol2. Si se cambia de stage, actualizar `baseUrl` y `clientId` con los outputs de `ceibbo-shared-<stage>`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "https://swf77ilyni.execute-api.us-east-1.amazonaws.com"
+      "value": "https://fcybkv8ung.execute-api.us-east-1.amazonaws.com"
     },
     {
       "key": "clientId",
-      "value": "4o0n03l1j4huinhofq55gd6kq3"
+      "value": "28b656hpaheoh75svfp7vsernm"
     },
     {
       "key": "password",

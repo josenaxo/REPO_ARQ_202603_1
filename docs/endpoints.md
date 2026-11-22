@@ -1,6 +1,6 @@
 # Endpoints de Ceibbo
 
-Base en demo: `https://swf77ilyni.execute-api.us-east-1.amazonaws.com` (un solo HTTP API compartido, creado en `infra/shared`).
+Base de prueba (`rol2`): `https://fcybkv8ung.execute-api.us-east-1.amazonaws.com` (un solo HTTP API compartido, creado en `infra/shared`).
 Todas las rutas, salvo `GET /health`, pasan por el autorizador JWT de Cognito: sin token responden `401` antes de invocar la Lambda.
 Contratos completos en `contracts/api/*.yaml`. Colección para ejecutarlas: `docs/postman/Ceibbo.postman_collection.json`.
 
@@ -38,8 +38,8 @@ Todas las respuestas de `postulaciones` traen la cabecera `X-App-Version` con la
 
 ```bash
 export CEIBBO_TEST_PASSWORD='<contraseña de prueba>'
-API=https://swf77ilyni.execute-api.us-east-1.amazonaws.com
-TOKEN=$(bash scripts/aws/token.sh demo estudiante@ceibbo.cl)
+API=https://fcybkv8ung.execute-api.us-east-1.amazonaws.com
+TOKEN=$(bash scripts/aws/token.sh rol2 estudiante@ceibbo.cl)
 curl -s $API/health
 curl -s -i "$API/oportunidades?tipo=PRACTICA" -H "Authorization: Bearer $TOKEN"
 ```
@@ -47,5 +47,6 @@ curl -s -i "$API/oportunidades?tipo=PRACTICA" -H "Authorization: Bearer $TOKEN"
 ## Probar con Postman
 
 1. Importar `docs/postman/Ceibbo.postman_collection.json`.
-2. En Variables de la colección, escribir la contraseña de prueba en el *Current value* de `password` (no se sube al repositorio).
+2. En Variables de la colección, escribir el output `UserPoolClientId` de `ceibbo-shared-rol2` en `clientId` y la contraseña
+   de prueba en el *Current value* de `password` (no se sube al repositorio).
 3. Ejecutar la carpeta **0 · Login** y después las demás en orden (Run collection). Cada request tiene tests de código HTTP.

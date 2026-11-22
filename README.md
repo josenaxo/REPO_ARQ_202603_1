@@ -65,11 +65,60 @@ backend/               Monolito anterior, solo como referencia (ver backend/READ
 
 ## Ambientes
 
-Cada integrante tiene su stage (`rol1`, `rol2`, `rol3`) en el AWS Academy Learner Lab. `demo` es lo que ve el profesor
-y solo se despliega desde `main`, en los releases.
+Cada integrante tiene su stage (`rol1`, `rol2`, `rol3`) en el AWS Academy Learner Lab. El stage `demo` se reserva para
+los releases desde `main`; mientras se recupera ese despliegue, la API validada para la revisión corresponde a `rol2`.
 
-- API de demo: `https://swf77ilyni.execute-api.us-east-1.amazonaws.com`
+- API de prueba (`rol2`): `https://fcybkv8ung.execute-api.us-east-1.amazonaws.com`
 - Usuarios de prueba: `estudiante@ceibbo.cl`, `empresa@ceibbo.cl` y `colegio@ceibbo.cl` (contraseña fuera del repositorio).
+
+## Endpoints disponibles
+
+URL base para las pruebas del profesor:
+
+```text
+https://fcybkv8ung.execute-api.us-east-1.amazonaws.com
+```
+
+Salvo `GET /health`, todos los endpoints requieren un token de Cognito en la cabecera
+`Authorization: Bearer <token>`. El grupo indicado corresponde al usuario que debe iniciar sesión.
+
+| Servicio | Método | Ruta | Acceso | Descripción |
+|---|---|---|---|---|
+| Health | `GET` | `/health` | Público | Comprueba la API y la conexión con DynamoDB |
+| Health | `GET` | `/health/privado` | Cualquier usuario autenticado | Comprueba el autorizador JWT |
+| Perfiles | `POST` | `/perfiles` | Usuario autenticado sin grupo | Crea el perfil de estudiante |
+| Perfiles | `GET` | `/perfiles/me` | Cualquier usuario autenticado | Obtiene el perfil propio |
+| Perfiles | `PUT` | `/perfiles/me` | Cualquier usuario autenticado | Actualiza el perfil propio |
+| Perfiles | `GET` | `/colegios` | Cualquier usuario autenticado | Lista los colegios |
+| Perfiles | `GET` | `/colegios/{id}/config` | Cualquier usuario autenticado | Obtiene la configuración de un colegio |
+| Perfiles | `PUT` | `/colegios/{id}/config` | Colegio dueño | Actualiza la configuración de su colegio |
+| Perfiles | `GET` | `/colegios/{id}/estudiantes` | Colegio dueño | Lista los estudiantes de su colegio |
+| Habilidades | `POST` | `/habilidades` | Estudiante | Declara una habilidad |
+| Habilidades | `GET` | `/habilidades/me` | Estudiante | Lista las habilidades propias |
+| Habilidades | `GET` | `/habilidades/pendientes` | Colegio | Lista habilidades pendientes de validación |
+| Habilidades | `PATCH` | `/habilidades/{estudianteId}/{habilidadId}` | Colegio dueño | Valida o rechaza una habilidad |
+| Postulaciones | `POST` | `/oportunidades` | Empresa | Publica una oportunidad |
+| Postulaciones | `GET` | `/oportunidades` | Cualquier usuario autenticado | Lista oportunidades; acepta `?tipo=` y `?remoto=` |
+| Postulaciones | `GET` | `/oportunidades/mias` | Empresa | Lista las oportunidades propias |
+| Postulaciones | `POST` | `/oportunidades/{id}/postulaciones` | Estudiante | Postula a una oportunidad |
+| Postulaciones | `GET` | `/oportunidades/{id}/postulaciones` | Empresa dueña | Lista postulantes de una oportunidad propia |
+| Postulaciones | `GET` | `/postulaciones/mias` | Estudiante | Lista las postulaciones propias |
+| Notificaciones | `GET` | `/notifications` | Cualquier usuario autenticado | Lista las notificaciones propias |
+| Notificaciones | `PATCH` | `/notifications/read-all` | Cualquier usuario autenticado | Marca todas las propias como leídas |
+| Notificaciones | `PATCH` | `/notifications/{id}/read` | Dueño de la notificación | Marca una notificación como leída |
+| Notificaciones | `DELETE` | `/notifications/{id}` | Dueño de la notificación | Borra una notificación propia |
+
+Prueba pública rápida:
+
+```bash
+curl -i https://fcybkv8ung.execute-api.us-east-1.amazonaws.com/health
+```
+
+Para probar el flujo completo, importar [`docs/postman/Ceibbo.postman_collection.json`](docs/postman/Ceibbo.postman_collection.json)
+y completar las variables `clientId` (output `UserPoolClientId` de `ceibbo-shared-rol2`) y `password`. La colección obtiene
+los tokens de los tres usuarios y ejecuta las solicitudes en orden. Los cuerpos, respuestas y códigos
+de error esperados están detallados en [`docs/endpoints.md`](docs/endpoints.md) y en los contratos OpenAPI de
+[`contracts/api/`](contracts/api/).
 
 ## Cómo trabajar
 
