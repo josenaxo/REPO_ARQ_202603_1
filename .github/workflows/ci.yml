@@ -44,8 +44,8 @@ jobs:
       # si falla un servicio igual se ven los resultados de los otros
       fail-fast: false
       matrix:
-        # cada servicio nuevo (por ejemplo notificaciones) se agrega a esta lista
-        servicio: [health, perfiles, habilidades, postulaciones]
+        # cada servicio nuevo se agrega a esta lista
+        servicio: [health, perfiles, habilidades, postulaciones, notificaciones]
     services:
       dynamodb:
         image: amazon/dynamodb-local:2.5.2

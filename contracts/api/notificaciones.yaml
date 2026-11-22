@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: Ceibbo - Servicio notificaciones
+  version: 1.0.0
+  description: Notificaciones de cada usuario, creadas a partir de los eventos de la cola (F2-02). Modelo de datos en docs/datos/notificaciones.md.
+servers:
+  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com
+    variables:
+      apiId:
+        default: example
+security:
+  - cognito: []
+paths:
+  /notifications:
+    get:
+      summary: Mis notificaciones, mas nuevas primero
+      x-grupos: [estudiante, empresa, colegio]
+      responses:
+        '200':
+          description: Notificaciones del usuario del token
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notificacion' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '500': { $ref: '#/components/responses/Error500' }
+  /notifications/read-all:
+    patch:
+      summary: Marcar todas mis notificaciones como leidas
+      x-grupos: [estudiante, empresa, colegio]
+      responses:
+        '200':
+          description: Cuantas pasaron a leidas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actualizadas]
+                properties:
+                  actualizadas: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '500': { $ref: '#/components/responses/Error500' }
+  /notifications/{id}/read:
+    patch:
+      summary: Marcar una notificacion como leida
+      x-grupos: [estudiante, empresa, colegio]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Notificacion marcada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, leida]
+                properties:
+                  id: { type: string, format: uuid }
+                  leida: { type: boolean, enum: [true] }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '500': { $ref: '#/components/responses/Error500' }
+  /notifications/{id}:
+    delete:
+      summary: Borrar una notificacion
+      x-grupos: [estudiante, empresa, colegio]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': { description: Notificacion borrada }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '500': { $ref: '#/components/responses/Error500' }
+components:
+  securitySchemes:
+    cognito:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: id de la notificacion (es el id del evento que la creo)
+      schema: { type: string, format: uuid }
+  schemas:
+    Notificacion:
+      type: object
+      required: [id, usuarioId, tipo, titulo, cuerpo, leida, creadaEn]
+      properties:
+        id: { type: string, format: uuid }
+        usuarioId: { type: string, description: sub de Cognito de quien la recibe }
+        tipo: { type: string, enum: [PostulacionCreada, HabilidadValidada], description: evento que la creo }
+        titulo: { type: string, example: Nueva postulacion }
+        cuerpo: { type: string }
+        enlace: { type: string, description: ruta de la pantalla a la que lleva, example: /student/habilidades }
+        leida: { type: boolean }
+        creadaEn: { type: string, format: date-time, description: fecha del evento }
+    Error:
+      type: object
+      required: [mensaje]
+      properties:
+        mensaje: { type: string }
+  responses:
+    Error401:
+      description: Token ausente o invalido (lo responde el autorizador)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Error403:
+      description: El token no trae usuario
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Error404:
+      description: La notificacion no existe o es de otro usuario
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Error500:
+      description: Error interno sin detalles sensibles
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

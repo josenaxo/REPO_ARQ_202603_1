@@ -1,0 +1,66 @@
+# Servicio notificaciones (F2-02): consume los eventos de la cola de infra/shared y los muestra en las pantallas.
+# Usa el HTTP API, el autorizador, la tabla y la cola de infra/shared: primero desplegar infra/shared en el mismo stage.
+# Contrato: contracts/api/notificaciones.yaml · Modelo de datos: docs/datos/notificaciones.md
+# Despliegue: serverless deploy --stage <rol1|rol2|rol3|demo>
+service: ceibbo-notificaciones
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 10
+  # En el Learner Lab no se pueden crear roles: se usa el LabRole que ya existe
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
+  # API compartido de infra/shared: no se crea uno nuevo
+  httpApi:
+    id: ${cf:ceibbo-shared-${sls:stage}.HttpApiId}
+  environment:
+    TABLE_NAME: ${cf:ceibbo-shared-${sls:stage}.TableName}
+
+# Las pruebas y los .md no se suben a la Lambda
+package:
+  patterns:
+    - '!test/**'
+    - '!**/*.md'
+
+functions:
+  # Las rutas que ya llaman las pantallas; todas pasan por el autorizador JWT
+  notificaciones:
+    handler: src/adapters/in/http.handler
+    events:
+      - httpApi:
+          method: GET
+          path: /notifications
+          authorizer: &autorizador
+            type: jwt
+            id: ${cf:ceibbo-shared-${sls:stage}.AuthorizerId}
+      - httpApi:
+          method: PATCH
+          path: /notifications/read-all
+          authorizer: *autorizador
+      - httpApi:
+          method: PATCH
+          path: /notifications/{id}/read
+          authorizer: *autorizador
+      - httpApi:
+          method: DELETE
+          path: /notifications/{id}
+          authorizer: *autorizador
+
+  # Consumidor de la cola de eventos (PostulacionCreada y HabilidadValidada)
+  consumidor:
+    handler: src/adapters/in/sqs.handler
+    # El VisibilityTimeout de la cola es 210 s (infra/shared/serverless.yml:55) = 6 x 30 s de timeout
+    # + 30 s de ventana de lote: así un mensaje no reaparece mientras todavía se está procesando
+    timeout: 30
+    events:
+      - sqs:
+          arn: ${cf:ceibbo-shared-${sls:stage}.EventsQueueArn}
+          batchSize: 10
+          maximumBatchingWindow: 30
+          # Respuesta parcial de lote: solo se reintentan los mensajes que fallaron
+          functionResponseType: ReportBatchItemFailures

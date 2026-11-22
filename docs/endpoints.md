@@ -25,6 +25,12 @@ Contratos completos en `contracts/api/*.yaml`. Colección para ejecutarlas: `doc
 | 17 | postulaciones (Rol 1) | `POST /oportunidades/{id}/postulaciones` | estudiante | 201, 403, 404, 409 | Postula (idempotente); publica `PostulacionCreada` en SQS |
 | 18 | postulaciones (Rol 1) | `GET /oportunidades/{id}/postulaciones` | empresa dueña | 200, 403, 404 | Postulantes de una oferta propia |
 | 19 | postulaciones (Rol 1) | `GET /postulaciones/mias` | estudiante | 200, 403 | Postulaciones propias |
+| 20 | notificaciones (Rol 3) | `GET /notifications` | todos | 200, 403 | Notificaciones propias, más nuevas primero |
+| 21 | notificaciones (Rol 3) | `PATCH /notifications/read-all` | todos | 200, 403 | Marca todas las propias como leídas |
+| 22 | notificaciones (Rol 3) | `PATCH /notifications/{id}/read` | dueño | 200, 403, 404 | Marca una como leída |
+| 23 | notificaciones (Rol 3) | `DELETE /notifications/{id}` | dueño | 204, 403, 404 | Borra una |
+
+Las notificaciones las crea el consumidor de la cola de eventos (función `consumidor` de notificaciones) a partir de `PostulacionCreada` y `HabilidadValidada`. Las rutas usan nombres en inglés porque son las que ya llamaban las pantallas.
 
 Todas las respuestas de `postulaciones` traen la cabecera `X-App-Version` con la versión de la Lambda que respondió.
 

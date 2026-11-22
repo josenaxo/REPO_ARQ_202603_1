@@ -91,13 +91,14 @@ Ejemplo del formato:
 | `PUT /colegios/{id}/config` | colegio dueño | | | | |
 | `GET /colegios/{id}/estudiantes` | colegio dueño | | | | |
 
-### notificaciones (Matías, por construir en F2-02)
+### notificaciones (Matías, F2-02)
 
 | Ruta o evento | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
 | `GET /notifications` | todos, cada uno las suyas | | | | |
-| `PATCH /notifications/{id}/read` | dueño de la notificación | | | | |
 | `PATCH /notifications/read-all` | todos, cada uno las suyas | | | | |
+| `PATCH /notifications/{id}/read` | dueño de la notificación | | | | |
+| `DELETE /notifications/{id}` | dueño de la notificación | | | | |
 | Consumidor de `EventsQueue` (SQS) | no aplica: lo invoca SQS | | | | |
 
 ### infra/shared (José)
