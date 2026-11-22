@@ -42,7 +42,7 @@ resources:
         CorsConfiguration:
           CorsRules:
             - AllowedMethods: [PUT, GET]
-              AllowedOrigins: ['*']
+              AllowedOrigins: ['http://localhost:3000'] # F2-15a: solo el frontend local
               AllowedHeaders: ['*']
     EventsDLQ:
       Type: AWS::SQS::Queue # Elegir el servicio de aws
@@ -106,7 +106,7 @@ resources:
         Name: ceibbo-${sls:stage}
         ProtocolType: HTTP
         CorsConfiguration:
-          AllowOrigins: ['*'] # restringir en el diseño de seguridad
+          AllowOrigins: ['http://localhost:3000'] # F2-15a: solo el frontend local
           AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
           AllowHeaders: [Authorization, Content-Type]
 
@@ -116,6 +116,11 @@ resources:
         ApiId: !Ref HttpApi
         StageName: '$default'
         AutoDeploy: true
+        # F2-15a: límite de tráfico de todas las rutas del stage (valores propuestos por el equipo).
+        # Lo que pasa del límite recibe 429. Sin esto rigen solo los límites de la cuenta.
+        DefaultRouteSettings:
+          ThrottlingRateLimit: 50 # solicitudes por segundo en régimen estable
+          ThrottlingBurstLimit: 100 # ráfaga máxima
     
 
     # Guardia: revisa el token de Cognito antes de llegar a la Lambda
