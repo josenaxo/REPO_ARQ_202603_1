@@ -7,10 +7,12 @@
 // marcarLeida(usuarioId, id) -> Promise<boolean>     (false si no existe)
 // marcarTodasLeidas(usuarioId) -> Promise<number>    (cuántas pasaron a leídas)
 // eliminar(usuarioId, id) -> Promise<boolean>        (false si no existe)
+// contarNoLeidas(usuarioId) -> Promise<number>       (cuántas tiene sin leer)
 export const METODOS_REPOSITORIO_NOTIFICACIONES = Object.freeze([
   'guardar',
   'listar',
   'marcarLeida',
   'marcarTodasLeidas',
   'eliminar',
+  'contarNoLeidas',
 ])

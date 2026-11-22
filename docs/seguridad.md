@@ -234,21 +234,22 @@ Rol ideal de la función `perfiles` (Diseñado; hoy usa LabRole):
 
 ### notificaciones (Matías, F2-02)
 
-Dos Lambdas: `notificaciones` atiende las 4 rutas, todas con el autorizador JWT, y `consumidor` lee la cola de eventos (`services/notificaciones/serverless.yml:32-66`). Los archivos de la tabla son relativos a `services/notificaciones/`.
+Dos Lambdas: `notificaciones` atiende las 5 rutas, todas con el autorizador JWT, y `consumidor` lee la cola de eventos (`services/notificaciones/serverless.yml:32-71`). Los archivos de la tabla son relativos a `services/notificaciones/`.
 
 | Ruta o evento | Grupo | Dónde se comprueba | Validaciones | Permisos IAM mínimos ideales | Estado |
 |---|---|---|---|---|---|
 | `GET /notifications` | todos, cada uno las suyas | `src/application/notificaciones.mjs:20-23`: solo se consulta la partición `NOTIF#<sub del token>` (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:15`) | No recibe datos | `dynamodb:Query` sobre la tabla | Implementado (`test/http.test.mjs:30`) |
-| `PATCH /notifications/read-all` | todos, cada uno las suyas | `src/application/notificaciones.mjs:31-34`, la misma partición | No recibe datos. El `Update` es condicional (`attribute_exists(PK)`): no revive una notificación borrada | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:52`) |
-| `PATCH /notifications/{id}/read` | dueño de la notificación | `src/adapters/out/dynamoRepositorioNotificaciones.mjs:43-52`: el `id` se busca solo dentro de la partición del usuario. Una ajena da 404 y no 403, así no se sabe si existe | El `id` solo se compara en un filtro. Si no existe, 404 | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:45`) |
-| `DELETE /notifications/{id}` | dueño de la notificación | Igual que la anterior (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:116-130`) | `Delete` condicional. Si no existe, 404 | `dynamodb:Query` y `dynamodb:DeleteItem` sobre la tabla | Implementado (`test/http.test.mjs:60`) |
+| `GET /notifications/unread-count` | todos, cada uno las suyas | `src/application/notificaciones.mjs:37-40`: solo cuenta dentro de la partición `NOTIF#<sub del token>` (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:116-134`). La pide la campana de las barras de navegación cada 30 s | No recibe datos. Responde `{ count }` | `dynamodb:Query` sobre la tabla | Implementado (`test/http.test.mjs:37` y `:47`; integración en `test/integracion/dynamoRepositorioNotificaciones.test.mjs`) |
+| `PATCH /notifications/read-all` | todos, cada uno las suyas | `src/application/notificaciones.mjs:31-34`, la misma partición | No recibe datos. El `Update` es condicional (`attribute_exists(PK)`): no revive una notificación borrada | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:68`) |
+| `PATCH /notifications/{id}/read` | dueño de la notificación | `src/adapters/out/dynamoRepositorioNotificaciones.mjs:43-52`: el `id` se busca solo dentro de la partición del usuario. Una ajena da 404 y no 403, así no se sabe si existe | El `id` solo se compara en un filtro. Si no existe, 404 | `dynamodb:Query` y `dynamodb:UpdateItem` sobre la tabla | Implementado (`test/http.test.mjs:61`) |
+| `DELETE /notifications/{id}` | dueño de la notificación | Igual que la anterior (`src/adapters/out/dynamoRepositorioNotificaciones.mjs:136-150`) | `Delete` condicional. Si no existe, 404 | `dynamodb:Query` y `dynamodb:DeleteItem` sobre la tabla | Implementado (`test/http.test.mjs:76`) |
 | Consumidor de `EventsQueue` (SQS) | no aplica: lo invoca SQS, no tiene ruta HTTP | `src/adapters/in/sqs.mjs:18-35` | JSON válido; `version` 1; `id`, `fecha` válida y `destinatarioId` obligatorios; los campos de `datos` que pide el contrato (`src/domain/Notificacion.mjs:34-45`). Un mensaje inválido se reintenta y después de 5 intentos pasa a la DLQ. Tipo desconocido: se ignora. Repetido: no se duplica (`Put` condicional, `src/adapters/out/dynamoRepositorioNotificaciones.mjs:77-93`) | `sqs:ReceiveMessage`, `sqs:DeleteMessage` y `sqs:GetQueueAttributes` sobre `EventsQueue`; `dynamodb:PutItem` sobre la tabla | Implementado (`test/sqs.test.mjs:15-59`, `test/dominio.test.mjs:30-51`). Probado en rol3: el mismo evento enviado dos veces dio `creada` y después `duplicado` |
 
-En las 4 rutas:
+En las 5 rutas:
 
-- Sin token, el autorizador responde 401. El usuario es el `sub` de los claims ya validados (`src/adapters/in/http.mjs:7-12`) y sin usuario la respuesta es 403 (`src/application/notificaciones.mjs:6-8`, prueba en `test/http.test.mjs:69`).
+- Sin token, el autorizador responde 401. El usuario es el `sub` de los claims ya validados (`src/adapters/in/http.mjs:8-13`) y sin usuario la respuesta es 403 (`src/application/notificaciones.mjs:6-8`, prueba en `test/http.test.mjs:85`).
 - No se exige grupo, porque los tres actores reciben notificaciones.
-- Un error inesperado responde 500 sin detalles (`src/adapters/in/http.mjs:39-42`, prueba en `test/http.test.mjs:81`).
+- Un error inesperado responde 500 sin detalles (`src/adapters/in/http.mjs:42-45`, prueba en `test/http.test.mjs:97`).
 
 Rol ideal (Diseñado; hoy las dos usan LabRole). Con un rol por función, ninguna tiene los permisos de la otra:
 

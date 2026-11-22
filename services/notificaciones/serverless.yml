@@ -38,6 +38,11 @@ functions:
           authorizer: &autorizador
             type: jwt
             id: ${cf:ceibbo-shared-${sls:stage}.AuthorizerId}
+      # La campana de las barras de navegación: la piden los tres roles cada 30 s
+      - httpApi:
+          method: GET
+          path: /notifications/unread-count
+          authorizer: *autorizador
       - httpApi:
           method: PATCH
           path: /notifications/read-all

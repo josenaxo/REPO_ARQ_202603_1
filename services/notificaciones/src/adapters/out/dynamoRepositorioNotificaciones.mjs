@@ -113,6 +113,26 @@ export const repositorioNotificacionesDynamo = comprobarPuerto(
       return actualizadas
     },
 
+    // Select COUNT devuelve solo cuántas cumplen el filtro, sin traer los ítems. DynamoDB igual
+    // lee la partición completa del usuario, así que el costo crece con sus notificaciones.
+    async contarNoLeidas(usuarioId) {
+      let total = 0
+      let desde
+      do {
+        const respuesta = await db.send(new QueryCommand({
+          TableName: tabla(),
+          KeyConditionExpression: 'PK = :pk',
+          FilterExpression: 'leida = :no',
+          ExpressionAttributeValues: { ':pk': particion(usuarioId), ':no': false },
+          Select: 'COUNT',
+          ExclusiveStartKey: desde,
+        }))
+        total += respuesta.Count
+        desde = respuesta.LastEvaluatedKey
+      } while (desde)
+      return total
+    },
+
     async eliminar(usuarioId, id) {
       const item = await buscar(usuarioId, id)
       if (!item) return false

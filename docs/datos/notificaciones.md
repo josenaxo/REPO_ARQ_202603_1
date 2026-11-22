@@ -28,6 +28,7 @@
 | 3 | Marcar una como leída | `*/notificaciones` | Query + filtro, y UpdateItem condicional | filtro `id = <id>` dentro de `NOTIF#<sub>`; `attribute_exists(PK)` |
 | 4 | Marcar todas como leídas | `*/notificaciones` | Query + filtro, y un UpdateItem por cada una | filtro `leida = false` dentro de `NOTIF#<sub>` |
 | 5 | Borrar una | `*/notificaciones` | Query + filtro, y DeleteItem condicional | filtro `id = <id>` dentro de `NOTIF#<sub>`; `attribute_exists(PK)` |
+| 6 | Contar las no leídas (el número de la campana) | barras de navegación de los tres roles, cada 30 s | Query + filtro con `Select: COUNT` | filtro `leida = false` dentro de `NOTIF#<sub>`. Devuelve solo el número, pero DynamoDB lee la partición completa |
 
 **Ningún patrón usa `Scan`.** Los patrones 3 a 5 leen la partición del usuario y filtran: un usuario tiene pocas notificaciones, así que es aceptable.
 
