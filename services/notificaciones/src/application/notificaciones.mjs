@@ -33,6 +33,12 @@ export async function marcarTodasLeidas({ repositorio }, { actor }) {
   return { actualizadas: await repositorio.marcarTodasLeidas(actor.id) }
 }
 
+// El número de la campana: las barras de navegación de los tres roles lo piden cada 30 s.
+export async function contarNoLeidas({ repositorio }, { actor }) {
+  exigirUsuario(actor)
+  return { count: await repositorio.contarNoLeidas(actor.id) }
+}
+
 export async function eliminar({ repositorio }, { actor, id }) {
   exigirUsuario(actor)
   if (!(await repositorio.eliminar(actor.id, id))) throw new ErrorDominio(404, 'la notificación no existe')

@@ -26,6 +26,23 @@ paths:
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
         '500': { $ref: '#/components/responses/Error500' }
+  /notifications/unread-count:
+    get:
+      summary: Cuantas notificaciones tengo sin leer (la campana de la barra de navegacion)
+      x-grupos: [estudiante, empresa, colegio]
+      responses:
+        '200':
+          description: Total de no leidas del usuario del token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '500': { $ref: '#/components/responses/Error500' }
   /notifications/read-all:
     patch:
       summary: Marcar todas mis notificaciones como leidas

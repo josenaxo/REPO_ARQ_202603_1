@@ -34,6 +34,22 @@ test('GET /notifications devuelve solo las del usuario, más nuevas primero', as
   assert.deepEqual(cuerpo(r).map((n) => n.id), ['n-nueva', 'n-vieja'])
 })
 
+test('GET /notifications/unread-count cuenta solo las no leídas del usuario', async () => {
+  const { manejar } = await preparar()
+  const antes = await manejar(peticion('GET /notifications/unread-count'))
+  assert.equal(antes.statusCode, 200)
+  assert.deepEqual(cuerpo(antes), { count: 2 }) // la de HabilidadValidada es de otro usuario
+  await manejar(peticion('PATCH /notifications/{id}/read', { id: 'n-vieja' }))
+  const despues = await manejar(peticion('GET /notifications/unread-count'))
+  assert.deepEqual(cuerpo(despues), { count: 1 })
+})
+
+test('GET /notifications/unread-count sin usuario en el token responde 403', async () => {
+  const { manejar } = await preparar()
+  const r = await manejar(peticion('GET /notifications/unread-count', { sub: null }))
+  assert.equal(r.statusCode, 403)
+})
+
 test('PATCH /notifications/{id}/read marca una como leída', async () => {
   const { repositorio, manejar } = await preparar()
   const r = await manejar(peticion('PATCH /notifications/{id}/read', { id: 'n-vieja' }))

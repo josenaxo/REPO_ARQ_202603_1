@@ -42,7 +42,7 @@ habilidades y postulaciones ──► SQS EventsQueue ──► consumidor de no
 | `services/notificaciones` | 3 | Avisos de los tres actores, creados a partir de los eventos de la cola | — (consume `PostulacionCreada` y `HabilidadValidada`) |
 
 Cada servicio sigue arquitectura hexagonal (`domain`, `application`, `ports`, `adapters`). El detalle de los patrones está en
-[`docs/patrones.md`](docs/patrones.md) y la lista de las 23 rutas en [`docs/endpoints.md`](docs/endpoints.md).
+[`docs/patrones.md`](docs/patrones.md) y la lista de las 24 rutas en [`docs/endpoints.md`](docs/endpoints.md).
 
 **Tecnologías:** Node.js 22 (JavaScript ESM), AWS Lambda, API Gateway HTTP API, DynamoDB, SQS con DLQ, Cognito,
 Serverless Framework v4 (CloudFormation), GitHub Actions, Docker (DynamoDB Local), Next.js 14.

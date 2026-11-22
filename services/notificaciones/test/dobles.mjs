@@ -38,6 +38,9 @@ export function repositorioEnMemoria() {
     async eliminar(usuarioId, id) {
       return items.delete(clave(usuarioId, id))
     },
+    async contarNoLeidas(usuarioId) {
+      return [...items.values()].filter((n) => n.usuarioId === usuarioId && !n.leida).length
+    },
   }
 }
 

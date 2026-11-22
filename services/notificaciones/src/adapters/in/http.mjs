@@ -1,5 +1,6 @@
 // Adaptador de entrada: traduce cada ruta HTTP a su caso de uso y el resultado a una respuesta.
-// Las rutas son las que ya llaman las pantallas (frontend/src/app/*/notificaciones/page.tsx).
+// Las rutas son las que ya llaman las pantallas (frontend/src/app/*/notificaciones/page.tsx)
+// y la campana de las barras de navegación (frontend/src/components/layout/*Nav.tsx).
 import { ErrorDominio } from '../../domain/errores.mjs'
 import * as casos from '../../application/notificaciones.mjs'
 import { repositorioNotificacionesDynamo } from '../out/dynamoRepositorioNotificaciones.mjs'
@@ -26,6 +27,8 @@ export function crearHandler(deps) {
       switch (event.routeKey) {
         case 'GET /notifications':
           return respuesta(200, await casos.misNotificaciones(deps, { actor }))
+        case 'GET /notifications/unread-count':
+          return respuesta(200, await casos.contarNoLeidas(deps, { actor }))
         case 'PATCH /notifications/read-all':
           return respuesta(200, await casos.marcarTodasLeidas(deps, { actor }))
         case 'PATCH /notifications/{id}/read':
