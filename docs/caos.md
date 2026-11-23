@@ -248,3 +248,45 @@ Aprendizajes y acciones:
 - La alarma de 5xx no se activó: la latencia no produce errores mientras quede bajo el timeout de 10 s. Para detectar este tipo de falla hace falta una alarma de latencia (p95), que hoy no existe.
 - `failure-lambda` leyó su configuración desde SSM con LabRole: no fue necesario el plan B.
 - Nota: el script contó 0 inyecciones porque la consulta a CloudWatch Logs devolvió el conteo en dos páginas (283 y 0). Se corrigió con el conteo real del log: 283 inyecciones en 1.356 peticiones (20,9 %).
+
+
+## 7. Experimento ejecutado: falla del consumidor de notificaciones (F2-13c)
+
+| Campo | Definición |
+|---|---|
+| ID | `CHAOS-NOT-01` (tarea F2-13c) |
+| Responsable | Matías (Rol 3) |
+| Servicio y stage | `ceibbo-notificaciones-rol3-consumidor` en `rol3`, que lee la cola `EventsQueue` |
+| Riesgo que prueba | RS-04 de `docs/seguridad.md`: un mensaje que el consumidor no puede procesar no debe perderse |
+| Estado estable | Medido antes de la falla: un evento de prueba se procesa con `resultado: creada`, la cola y la DLQ están en 0, la alarma `ceibbo-rol3-dlq` en OK y el consumidor sin errores |
+| Hipótesis | Si el consumidor falla en todas sus invocaciones, el evento no se pierde: SQS lo reintenta 5 veces (`maxReceiveCount`), lo pasa a `EventsDLQ` y la alarma `ceibbo-rol3-dlq` pasa a ALARM. Al apagar la falla y devolver el mensaje a la cola, la notificación se crea una sola vez |
+| Falla | Excepción (`exception`) antes de la lógica del handler |
+| Alcance | 100 % de las invocaciones del consumidor, un solo evento de prueba para la empresa de prueba, solo en `rol3` |
+| Mecanismo | failure-lambda con su configuración en SSM (`/ceibbo/rol3/failure-lambda`), sin volver a desplegar para encender o apagar la falla |
+| Métricas | Profundidad de `EventsQueue` y `EventsDLQ`, estado de la alarma `ceibbo-rol3-dlq`, `Errors` e `Invocations` del consumidor, inyecciones en CloudWatch Logs y notificaciones guardadas en DynamoDB |
+| Criterio de aprobación | El mensaje llega a la DLQ y la alarma pasa a ALARM; después de devolverlo hay exactamente una notificación del evento |
+| Criterio de aborto | 40 minutos sin que el mensaje llegue a la DLQ (el script apaga la falla solo) |
+| Recuperación | Apagar la falla, devolver el mensaje de la DLQ a la cola (`aws sqs start-message-move-task`), comprobar la notificación, volver a desplegar en `rol3` el código de `develop` y borrar el parámetro de SSM |
+
+| Dato | Resultado |
+|---|---|
+| Fecha y hora | 23-11-2026, 00:44 a 01:07 (hora de Chile) |
+| Stage | `rol3` |
+| Versión desplegada | Rama `caos/F2-13c` (no integrada en `develop`): el handler de `sqs.mjs` envuelto con `failureLambda(...)` |
+| Duración real | Falla activa 22 min (00:44:01 a 01:06:15) |
+| Mensajes | 1 evento `PostulacionCreada` de prueba |
+| Intentos con falla | 5 inyecciones registradas (00:45:17, 00:48:42, 00:52:12, 00:55:42 y 00:59:12); `Invocations` 5 y `Errors` 5 |
+| Separación entre intentos | Unos 3,5 minutos: el visibility timeout de 210 s de `EventsQueue` |
+| Llegada a la DLQ | Cerca de las 01:02 (cola 0, DLQ 1) |
+| Alarma `ceibbo-rol3-dlq` | Pasó de OK a ALARM a las 01:05:28, 21 minutos después de enviar el evento |
+| Recuperación | Falla apagada a las 01:06:15; mensaje devuelto a la cola a las 01:06:40; procesado a las 01:07:25 con `resultado: creada` |
+| Datos duplicados o corruptos | No: una sola notificación "Nueva postulación" para la empresa, con la fecha original del evento |
+| Resultado | **APROBADO** |
+
+Aprendizajes y acciones:
+
+- La cola con DLQ cumple lo que promete: con el consumidor caído, el evento no se perdió y se pudo recuperar después.
+- El receptor idempotente funcionó en la recuperación: el mensaje devuelto creó una sola notificación.
+- La alarma tarda unos 20 minutos en avisar, porque espera los 5 reintentos de 210 s. Para avisar antes haría falta una alarma sobre `Errors` del consumidor.
+- Al medir el estado estable apareció otro riesgo: el disparador SQS del consumidor estaba desactivado desde la madrugada del 22-11. En ese caso los mensajes esperan en la cola sin fallar, no llegan a la DLQ y ninguna alarma avisa. Hace falta una alarma sobre `ApproximateAgeOfOldestMessage` de `EventsQueue`.
+- Como en CHAOS-POS-01, `failure-lambda` leyó su configuración desde SSM con LabRole: no fue necesario el plan B.
