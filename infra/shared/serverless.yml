@@ -106,7 +106,7 @@ resources:
         Name: ceibbo-${sls:stage}
         ProtocolType: HTTP
         CorsConfiguration:
-          AllowOrigins: ['http://localhost:3000'] # F2-15a: solo el frontend local
+          AllowOrigins: ['http://localhost:3000', 'http://ceibbo-frontend-rol1-sitiobucket-il11abhzhzcs.s3-website-us-east-1.amazonaws.com'] # F2-15a: frontend local y frontend publicado (infra/frontend, stage rol1)
           AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
           AllowHeaders: [Authorization, Content-Type]
 
