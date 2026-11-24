@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CeibboLogoMark } from '@/components/ui/CeibboLogoMark'
 
+// Página estática: en el sitio publicado (S3) no hay servidor que la genere en cada visita.
+export const dynamic = 'force-static'
+
 export const metadata: Metadata = { title: 'Ceibbo — Construye tu identidad profesional' }
 
 interface PublicStats {

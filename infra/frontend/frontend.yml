@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Ceibbo - frontend estatico (export de Next.js) en S3 con sitio web, servido por CloudFront
+# Stack ceibbo-frontend-<stage>. Ver infra/frontend/README.md.
+# El Learner Lab no permite Origin Access Control ni CloudFront Functions, por eso CloudFront
+# usa como origen el endpoint de sitio web de S3 (que resuelve /ruta/ -> /ruta/index.html).
+
+Parameters:
+  ConCloudFront:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: false publica solo con el sitio web de S3 (HTTP), si el lab no permite CloudFront
+
+Conditions:
+  UsaCloudFront: !Equals [!Ref ConCloudFront, 'true']
+
+Resources:
+  SitioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+      PublicAccessBlockConfiguration: # sitio publico: solo HTML, JS y CSS, sin datos ni secretos
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+
+  SitioBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SitioBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject # solo lectura de los archivos del sitio
+            Resource: !Sub '${SitioBucket.Arn}/*'
+
+  SitioDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: UsaCloudFront
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${AWS::StackName}'
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: s3-sitio
+            DomainName: !Select [2, !Split ['/', !GetAtt SitioBucket.WebsiteURL]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only # el endpoint de sitio web de S3 solo habla HTTP
+        DefaultCacheBehavior:
+          TargetOriginId: s3-sitio
+          ViewerProtocolPolicy: redirect-to-https # el navegador siempre usa HTTPS
+          AllowedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+
+Outputs:
+  BucketName: { Value: !Ref SitioBucket }
+  DistributionId: { Value: !If [UsaCloudFront, !Ref SitioDistribution, 'ninguna'] }
+  FrontendUrl:
+    Value: !If [UsaCloudFront, !Sub 'https://${SitioDistribution.DomainName}', !GetAtt SitioBucket.WebsiteURL]
