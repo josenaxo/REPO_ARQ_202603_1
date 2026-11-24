@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { api } from '@/lib/api-client'
+import { listarNotificaciones, marcarLeida, marcarTodasLeidas, eliminarNotificacion } from '@/lib/api/notificaciones'
 import { useAuthStore } from '@/store/auth.store'
 import { timeAgo } from '@/lib/utils'
 import { usePageTitle } from '@/lib/usePageTitle'
@@ -39,7 +39,7 @@ export default function NotificacionesPage() {
 
   const load = useCallback(() => {
     if (!isAuthenticated) { setLoading(false); return }
-    api.get<Notification[]>('/notifications')
+    listarNotificaciones()
       .then(data => setNotifications(data))
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -48,19 +48,19 @@ export default function NotificacionesPage() {
   useEffect(() => { load() }, [load])
 
   const markRead = async (id: string) => {
-    await api.patch(`/notifications/${id}/read`, {}).catch(() => {})
+    await marcarLeida(id).catch(() => {})
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n))
   }
 
   const markAllRead = async () => {
-    await api.patch('/notifications/read-all', {}).catch(() => {})
+    await marcarTodasLeidas().catch(() => {})
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
   }
 
   const remove = async (id: string) => {
     // Optimistic UI: remove immediately, then call API
     setNotifications(prev => prev.filter(n => n.id !== id))
-    api.delete(`/notifications/${id}`).catch(() => {
+    eliminarNotificacion(id).catch(() => {
       // If delete fails, reload to restore actual state
       load()
     })

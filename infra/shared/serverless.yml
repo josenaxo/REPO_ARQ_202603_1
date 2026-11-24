@@ -42,7 +42,7 @@ resources:
         CorsConfiguration:
           CorsRules:
             - AllowedMethods: [PUT, GET]
-              AllowedOrigins: ['*']
+              AllowedOrigins: ['http://localhost:3000'] # F2-15a: solo el frontend local
               AllowedHeaders: ['*']
     EventsDLQ:
       Type: AWS::SQS::Queue # Elegir el servicio de aws
@@ -106,7 +106,7 @@ resources:
         Name: ceibbo-${sls:stage}
         ProtocolType: HTTP
         CorsConfiguration:
-          AllowOrigins: ['*'] # restringir en el diseño de seguridad
+          AllowOrigins: ['http://localhost:3000', 'http://ceibbo-frontend-rol1-sitiobucket-il11abhzhzcs.s3-website-us-east-1.amazonaws.com'] # F2-15a: frontend local y frontend publicado (infra/frontend, stage rol1)
           AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
           AllowHeaders: [Authorization, Content-Type]
 
@@ -116,6 +116,11 @@ resources:
         ApiId: !Ref HttpApi
         StageName: '$default'
         AutoDeploy: true
+        # F2-15a: límite de tráfico de todas las rutas del stage (valores propuestos por el equipo).
+        # Lo que pasa del límite recibe 429. Sin esto rigen solo los límites de la cuenta.
+        DefaultRouteSettings:
+          ThrottlingRateLimit: 50 # solicitudes por segundo en régimen estable
+          ThrottlingBurstLimit: 100 # ráfaga máxima
     
 
     # Guardia: revisa el token de Cognito antes de llegar a la Lambda
@@ -131,6 +136,56 @@ resources:
           Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
           Audience:
             - !Ref UserPoolClient
+
+    # Alarmas base (F2-01r): condición de parada de los experimentos de caos.
+    # Sin acciones (no hay SNS): el estado se mira en la consola, CloudWatch > Alarms.
+    AlarmaApi5xx:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-api-5xx
+        Namespace: AWS/ApiGateway
+        MetricName: 5xx # errores del lado del servidor del HTTP API
+        Dimensions:
+          - Name: ApiId
+            Value: !Ref HttpApi
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching # sin tráfico no es una falla
+
+    AlarmaDlq:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-dlq
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible # mensajes que fallaron 5 veces
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt EventsDLQ.QueueName
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+
+    AlarmaThrottlesPostulaciones:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ceibbo-${sls:stage}-throttles-postulaciones
+        Namespace: AWS/Lambda
+        MetricName: Throttles # invocaciones rechazadas por falta de concurrencia
+        Dimensions:
+          - Name: FunctionName # por función: no hay documentación de un total sin dimensión
+            Value: ceibbo-postulaciones-${sls:stage}-postulaciones
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
   
   # Directorio: valores que leen los servicios con ${cf:ceibbo-shared-<stage>.Nombre}
   Outputs:
